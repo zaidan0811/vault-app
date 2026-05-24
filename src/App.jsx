@@ -13,6 +13,7 @@ import {
 
 // ─── Firebase — npm install firebase ─────────────────────
 import { initializeApp, getApps } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -25,13 +26,14 @@ import {
 // ═══════════════════════════════════════════════════════════
 //  🔧 KONFIGURASI — isi sebelum deploy ke Vercel
 // ═══════════════════════════════════════════════════════════
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyC7ZoqG00x6",
-  authDomain:        "vault-app-4bacb.firebaseapp.com",
-  projectId:         "vault-app-4bacb",
-  storageBucket:     "vault-app-4bacb.firebasestorage.app",
+const firebaseConfig = {
+  apiKey: "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY",
+  authDomain: "vault-app-4bacb.firebaseapp.com",
+  projectId: "vault-app-4bacb",
+  storageBucket: "vault-app-4bacb.firebasestorage.app",
   messagingSenderId: "645133095463",
-  appId:             "1:645133095463:web:927514084e8908cc53f402",
+  appId: "1:645133095463:web:927514084e8908cc53f402",
+  measurementId: "G-6V63JXXMB9"
 };
 // 👑 Email akun kamu (admin) — satu-satunya yang bisa lihat semua data
 const ADMIN_EMAIL = "zaidan1408@gmail.com";
