@@ -321,7 +321,7 @@ function Onboarding({ onComplete }) {
                     <input className="vi" style={{...S.input}} placeholder={`Nama kategori ${catTab==='income'?'pemasukan':'pengeluaran'}`} value={catForm.name} onChange={e=>setCatForm(p=>({...p,name:e.target.value}))}/>
                   </div>
                   <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
-                                      <div style={{display:'flex',gap:6}}>
+                  <div style={{display:'flex',gap:6}}>
                     <button className="scale" style={{...S.btnGhost,padding:'8px 12px',fontSize:12}} onClick={()=>setCatFormVisible(false)}>Batal</button>
                     <button className="scale" style={{...S.btnPrimary,padding:'8px 12px',fontSize:12,flex:1}} onClick={addCat}>Tambah</button>
                   </div>
