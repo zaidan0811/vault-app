@@ -26,17 +26,17 @@ import {
 //  🔧 KONFIGURASI — isi sebelum deploy ke Vercel
 // ═══════════════════════════════════════════════════════════
 const FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID",
+  apiKey:            "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY",
+  authDomain:        "vault-app-4bacb.firebaseapp.com",
+  projectId:         "vault-app-4bacb",
+  storageBucket:     "vault-app-4bacb.appspot.com",
+  messagingSenderId: "645133095463",
+  appId:             "1:645133095463:web:927514084e8908cc53f402",
 };
 // 👑 Email akun kamu (admin) — satu-satunya yang bisa lihat semua data
-const ADMIN_EMAIL = "YOUR_EMAIL@gmail.com";
+const ADMIN_EMAIL = "zaidan1408@gmail.com";
 
-const FB_ON = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+const FB_ON = FIREBASE_CONFIG.apiKey !== "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY";
 let fbAuth = null, fbDb = null;
 if (FB_ON) {
   try {
