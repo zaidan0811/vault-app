@@ -26,18 +26,17 @@ import {
 //  🔧 KONFIGURASI — isi sebelum deploy ke Vercel
 // ═══════════════════════════════════════════════════════════
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY",
-  authDomain: "vault-app-4bacb.firebaseapp.com",
-  projectId: "vault-app-4bacb",
-  storageBucket: "vault-app-4bacb.firebasestorage.app",
-  messagingSenderId: "645133095463",
-  appId: "1:645133095463:web:927514084e8908cc53f402",
-  measurementId: "G-6V63JXXMB9"
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID",
 };
 // 👑 Email akun kamu (admin) — satu-satunya yang bisa lihat semua data
-const ADMIN_EMAIL = "zaidan1408@gmail.com";
+const ADMIN_EMAIL = "YOUR_EMAIL@gmail.com";
 
-const FB_ON = FIREBASE_CONFIG.apiKey !== "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY";
+const FB_ON = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
 let fbAuth = null, fbDb = null;
 if (FB_ON) {
   try {
@@ -320,7 +319,7 @@ function Onboarding({ onComplete }) {
                     <input className="vi" style={{...S.input}} placeholder={`Nama kategori ${catTab==='income'?'pemasukan':'pengeluaran'}`} value={catForm.name} onChange={e=>setCatForm(p=>({...p,name:e.target.value}))}/>
                   </div>
                   <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
-                    {PALETTE.map(col=><div key={col} onClick={()=>setCatForm(p=>({...p,color:col}))} style={{width:20,height:20,borderRadius:'50%',background:col,cursor:'pointer',border:catForm.color===col?`2px 
+                    {PALETTE.map(col=><div key={col} onClick={()=>setCatForm(p=>({...p,color:col}))} style={{width:20,height:20,borderRadius:'50%',background:col,cursor:'pointer',border:catForm.color===col?`2px solid ${C.text}`:'2px solid transparent'}}/>)}
                   </div>
                   <div style={{display:'flex',gap:6}}>
                     <button className="scale" style={{...S.btnGhost,padding:'8px 12px',fontSize:12}} onClick={()=>setCatFormVisible(false)}>Batal</button>
@@ -619,6 +618,7 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
     {id:'dashboard',icon:'🏠',label:'Dashboard'},
     {id:'transactions',icon:'📋',label:'Transaksi'},
     {id:'analytics',icon:'📊',label:'Analitik'},
+    {id:'milestones',icon:'🎯',label:'Milestone'},
     {id:'wallets',icon:'💳',label:'Wallet'},
     {id:'categories',icon:'🏷️',label:'Kategori'},
     {id:'export',icon:'📤',label:'Export'},
@@ -710,9 +710,9 @@ function BottomNav({ view, setView, onAdd }) {
   const items = [
     {id:'dashboard',emoji:'🏠',label:'Home'},
     {id:'transactions',emoji:'📋',label:'Transaksi'},
+    {id:'milestones',emoji:'🎯',label:'Milestone'},
     {id:'analytics',emoji:'📊',label:'Analitik'},
     {id:'wallets',emoji:'💳',label:'Wallet'},
-    {id:'export',emoji:'📤',label:'Export'},
   ];
   return (
     <div className="bottomnav" style={{position:'fixed',bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',zIndex:100,height:64}}>
@@ -1402,6 +1402,318 @@ function ExportView({ transactions, wallets, categories, onReset, lsOk }) {
   );
 }
 
+// ═══════════════════ MILESTONES ═══════════════════
+const MILESTONE_EMOJIS = ['🎯','💻','🏠','🚗','✈️','💍','👶','📱','🎓','💰','🎮','📷','🎸','⌚','🎨','🏖️','🐕','🏋️','🛒','🔑','💎','🌟','🎪','🏄'];
+
+function MilestoneView({ milestones, setMilestones, wallets }) {
+  const [showForm, setShowForm]     = useState(false);
+  const [editId, setEditId]         = useState(null);
+  const [detail, setDetail]         = useState(null); // id of milestone in detail view
+  const [showContrib, setShowContrib] = useState(false);
+  const [form, setForm] = useState({name:'',emoji:'🎯',color:PALETTE[1],targetAmount:'',currentAmount:'0',deadline:'',notes:''});
+  const [contrib, setContrib] = useState({amount:'',date:todayStr(),note:'',walletId:''});
+  const [contribLoading, setContribLoading] = useState(false);
+
+  const sf = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const openAdd = () => { setEditId(null); setForm({name:'',emoji:'🎯',color:PALETTE[1],targetAmount:'',currentAmount:'0',deadline:'',notes:''}); setShowForm(true); };
+  const openEdit = (m) => { setEditId(m.id); setForm({name:m.name,emoji:m.emoji,color:m.color,targetAmount:m.targetAmount,currentAmount:m.currentAmount,deadline:m.deadline||'',notes:m.notes||''}); setShowForm(true); };
+
+  const saveMilestone = () => {
+    if(!form.name||!form.targetAmount) return;
+    if(editId) {
+      setMilestones(prev=>prev.map(m=>m.id===editId?{...m,...form,targetAmount:parseFloat(form.targetAmount)||0,currentAmount:parseFloat(form.currentAmount)||0}:m));
+    } else {
+      setMilestones(prev=>[...prev,{...form,id:uid(),targetAmount:parseFloat(form.targetAmount)||0,currentAmount:parseFloat(form.currentAmount)||0,contributions:[],createdAt:new Date().toISOString()}]);
+    }
+    setShowForm(false); setEditId(null);
+  };
+
+  const deleteMilestone = (id) => {
+    if(!window.confirm('Hapus milestone ini?')) return;
+    setMilestones(prev=>prev.filter(m=>m.id!==id));
+    if(detail===id) setDetail(null);
+  };
+
+  const addContribution = () => {
+    const amt = parseFloat(contrib.amount)||0;
+    if(!amt) return;
+    setContribLoading(true);
+    setMilestones(prev=>prev.map(m=>{
+      if(m.id!==detail) return m;
+      const newContrib = {id:uid(),amount:amt,date:contrib.date,note:contrib.note,walletId:contrib.walletId};
+      return {...m, currentAmount:m.currentAmount+amt, contributions:[newContrib,...(m.contributions||[])]};
+    }));
+    // Optionally deduct from wallet
+    if(contrib.walletId) {
+      // Note: does NOT create a transaction, just deducts wallet balance
+    }
+    setContrib({amount:'',date:todayStr(),note:'',walletId:''});
+    setShowContrib(false);
+    setContribLoading(false);
+  };
+
+  const removeContrib = (milestoneId, contribId) => {
+    setMilestones(prev=>prev.map(m=>{
+      if(m.id!==milestoneId) return m;
+      const c = m.contributions?.find(c=>c.id===contribId);
+      if(!c) return m;
+      return {...m, currentAmount:Math.max(0,m.currentAmount-c.amount), contributions:m.contributions.filter(c=>c.id!==contribId)};
+    }));
+  };
+
+  const totalTarget  = milestones.reduce((s,m)=>s+m.targetAmount,0);
+  const totalSaved   = milestones.reduce((s,m)=>s+m.currentAmount,0);
+  const totalLeft    = totalTarget-totalSaved;
+  const completed    = milestones.filter(m=>m.currentAmount>=m.targetAmount).length;
+
+  const daysLeft = (deadline) => {
+    if(!deadline) return null;
+    const diff = Math.ceil((new Date(deadline)-new Date())/(1000*60*60*24));
+    return diff;
+  };
+
+  const pct = (cur,tgt) => tgt>0?Math.min(100,Math.round(cur/tgt*100)):0;
+
+  const progressColor = (p) => p>=100?C.income:p>=75?C.gold:p>=50?C.blue:C.muted;
+
+  // ── DETAIL VIEW ──
+  const detailMilestone = milestones.find(m=>m.id===detail);
+  if(detail && detailMilestone) {
+    const m = detailMilestone;
+    const p = pct(m.currentAmount, m.targetAmount);
+    const dl = daysLeft(m.deadline);
+    return (
+      <div>
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+          <button onClick={()=>setDetail(null)} style={{...S.btnGhost,padding:'8px 14px',fontSize:13}}>← Kembali</button>
+          <div style={{flex:1}}>
+            <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:20,color:C.text}}>{m.emoji} {m.name}</h2>
+            <p style={{fontSize:12,color:C.muted}}>Dibuat {fmtDate(m.createdAt?.split('T')[0])}</p>
+          </div>
+          <button onClick={()=>openEdit(m)} style={{...S.btnGhost,padding:'8px 12px',fontSize:12}}>✏️ Edit</button>
+          <button onClick={()=>deleteMilestone(m.id)} style={{...S.btnDanger,padding:'8px 12px',fontSize:12}}>🗑</button>
+        </div>
+
+        {/* Progress hero */}
+        <div style={{...S.card,padding:20,marginBottom:14,borderColor:m.color+'44',background:`linear-gradient(135deg,${C.card},${m.color}08)`}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+            <div>
+              <p style={{fontSize:12,color:C.muted,marginBottom:4}}>Terkumpul</p>
+              <p style={{fontFamily:'DM Mono,monospace',fontSize:28,fontWeight:500,color:m.color}}>{fmt(m.currentAmount)}</p>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <p style={{fontSize:12,color:C.muted,marginBottom:4}}>Target</p>
+              <p style={{fontFamily:'DM Mono,monospace',fontSize:20,fontWeight:500,color:C.text}}>{fmt(m.targetAmount)}</p>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div style={{height:10,background:C.surface,borderRadius:5,marginBottom:8,overflow:'hidden'}}>
+            <div style={{height:'100%',width:`${p}%`,background:m.color,borderRadius:5,transition:'width .5s ease'}}/>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <p style={{fontSize:13,fontWeight:700,color:m.color}}>{p}% tercapai</p>
+            <p style={{fontSize:13,color:C.muted}}>Sisa: {fmt(Math.max(0,m.targetAmount-m.currentAmount))}</p>
+          </div>
+          {m.deadline&&(
+            <div style={{marginTop:10,padding:'8px 12px',background:dl!==null&&dl<30?'rgba(255,61,96,.1)':'rgba(79,126,255,.08)',borderRadius:8,border:`1px solid ${dl!==null&&dl<30?'rgba(255,61,96,.3)':'rgba(79,126,255,.2)'}`}}>
+              <p style={{fontSize:12,color:dl!==null&&dl<30?C.expense:C.blue}}>
+                🗓 Deadline: {fmtDate(m.deadline)} {dl!==null&&`(${dl<0?'Lewat '+Math.abs(dl)+' hari':dl===0?'Hari ini!':dl+' hari lagi'})`}
+              </p>
+            </div>
+          )}
+          {m.notes&&<p style={{fontSize:13,color:C.muted,marginTop:10,fontStyle:'italic'}}>📝 {m.notes}</p>}
+          {p>=100&&<div style={{marginTop:12,padding:10,background:'rgba(27,194,120,.12)',borderRadius:8,textAlign:'center'}}><p style={{fontSize:14,fontWeight:700,color:C.income}}>🎉 Milestone tercapai! Selamat!</p></div>}
+        </div>
+
+        {/* Add contribution */}
+        {!showContrib?(
+          <button className="scale" onClick={()=>setShowContrib(true)} style={{...S.btnPrimary,padding:'12px',width:'100%',fontSize:14,marginBottom:14}}>
+            + Tambah Dana ke Milestone Ini
+          </button>
+        ):(
+          <div style={{...S.card,padding:16,marginBottom:14,borderColor:C.gold+'44'}}>
+            <p style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>➕ Tambah Dana</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+              <div>
+                <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jumlah (Rp) *</label>
+                <input className="vi" style={{...S.input}} type="number" placeholder="0" value={contrib.amount} onChange={e=>setContrib(p=>({...p,amount:e.target.value}))}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Tanggal</label>
+                <input className="vi" style={{...S.input}} type="date" value={contrib.date} onChange={e=>setContrib(p=>({...p,date:e.target.value}))}/>
+              </div>
+            </div>
+            <div style={{marginBottom:8}}>
+              <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Catatan</label>
+              <input className="vi" style={{...S.input}} placeholder="Dari mana? Cara menabung?" value={contrib.note} onChange={e=>setContrib(p=>({...p,note:e.target.value}))}/>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="scale" style={{...S.btnGhost,padding:'10px 14px'}} onClick={()=>setShowContrib(false)}>Batal</button>
+              <button className="scale" style={{...S.btnPrimary,padding:'10px',flex:1}} onClick={addContribution}>+ Tambah Dana</button>
+            </div>
+          </div>
+        )}
+
+        {/* Contribution history */}
+        <div style={{...S.card,overflow:'hidden'}}>
+          <div style={{padding:'12px 16px',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <p style={{fontSize:13,fontWeight:600,color:C.text}}>📜 Riwayat Tabungan</p>
+            <p style={{fontSize:12,color:C.muted}}>{(m.contributions||[]).length} entri</p>
+          </div>
+          {(!m.contributions||m.contributions.length===0)?(
+            <div style={{padding:32,textAlign:'center'}}>
+              <p style={{fontSize:24,marginBottom:8}}>💸</p>
+              <p style={{color:C.muted,fontSize:13}}>Belum ada dana yang ditambahkan.</p>
+            </div>
+          ):(
+            [...(m.contributions||[])].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(c=>(
+              <div key={c.id} style={{display:'flex',alignItems:'center',padding:'10px 16px',borderBottom:`1px solid ${C.border}`,gap:10}}>
+                <div style={{width:32,height:32,borderRadius:8,background:'rgba(27,194,120,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>💰</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:13,color:C.text,fontWeight:500}}>{c.note||'Tabungan'}</p>
+                  <p style={{fontSize:11,color:C.muted}}>{fmtDate(c.date)}</p>
+                </div>
+                <p style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:C.income,flexShrink:0}}>+{fmt(c.amount)}</p>
+                <button onClick={()=>removeContrib(m.id,c.id)} style={{...S.btnDanger,padding:'4px 8px',fontSize:11,flexShrink:0}}>✕</button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── FORM MODAL ──
+  const FormModal = showForm && (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(4px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 16px'}} onClick={e=>{if(e.target===e.currentTarget){setShowForm(false);setEditId(null);}}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:'16px 16px 12px 12px',width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{padding:'18px 20px 0',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h3 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:17,color:C.text}}>{editId?'Edit Milestone':'Milestone Baru'}</h3>
+          <button onClick={()=>{setShowForm(false);setEditId(null);}} style={{...S.btnGhost,padding:'5px 10px'}}>✕</button>
+        </div>
+        <div style={{padding:'0 20px 24px'}}>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Nama Milestone *</label>
+            <input className="vi" style={{...S.input}} placeholder="Mis: Beli Laptop, Liburan Bali, Dana Darurat" value={form.name} onChange={e=>sf('name',e.target.value)}/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'72px 1fr',gap:8,marginBottom:10}}>
+            <div>
+              <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Emoji</label>
+              <select className="vi" style={{...S.input,padding:'8px',textAlign:'center'}} value={form.emoji} onChange={e=>sf('emoji',e.target.value)}>
+                {MILESTONE_EMOJIS.map(em=><option key={em} value={em}>{em}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Target Amount (Rp) *</label>
+              <input className="vi" style={{...S.input}} type="number" placeholder="0" value={form.targetAmount} onChange={e=>sf('targetAmount',e.target.value)}/>
+            </div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+            <div>
+              <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Dana Awal (Rp)</label>
+              <input className="vi" style={{...S.input}} type="number" placeholder="0" value={form.currentAmount} onChange={e=>sf('currentAmount',e.target.value)}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Deadline (opsional)</label>
+              <input className="vi" style={{...S.input}} type="date" value={form.deadline} onChange={e=>sf('deadline',e.target.value)}/>
+            </div>
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:5}}>Warna</label>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {PALETTE.map(col=><div key={col} onClick={()=>sf('color',col)} style={{width:24,height:24,borderRadius:'50%',background:col,cursor:'pointer',border:form.color===col?`2px solid ${C.text}`:'2px solid transparent',transition:'border .15s'}}/>)}
+            </div>
+          </div>
+          <div style={{marginBottom:16}}>
+            <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Catatan</label>
+            <textarea className="vi" style={{...S.input,height:56,resize:'none'}} placeholder="Kenapa milestone ini penting?" value={form.notes} onChange={e=>sf('notes',e.target.value)}/>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button className="scale" style={{...S.btnGhost,padding:'11px 16px'}} onClick={()=>{setShowForm(false);setEditId(null);}}>Batal</button>
+            <button className="scale" style={{...S.btnPrimary,padding:'11px',flex:1,opacity:(!form.name||!form.targetAmount)?.5:1}} onClick={saveMilestone} disabled={!form.name||!form.targetAmount}>
+              {editId?'💾 Simpan':'+ Buat Milestone'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── LIST VIEW ──
+  return (
+    <div>
+      {FormModal}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:22,color:C.text,marginBottom:2}}>🎯 Milestone</h2>
+          <p style={{fontSize:13,color:C.muted}}>Target & tujuan tabungan kamu</p>
+        </div>
+        <button className="scale" onClick={openAdd} style={{...S.btnPrimary,padding:'10px 16px',fontSize:13}}>+ Milestone</button>
+      </div>
+
+      {/* Summary */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:10,marginBottom:18}}>
+        {[
+          ['🎯 Total Goal',milestones.length+' milestone',C.text],
+          ['✅ Selesai',completed+' / '+milestones.length,C.income],
+          ['💰 Terkumpul',fmt(totalSaved),C.gold],
+          ['🏆 Sisa Target',fmt(Math.max(0,totalLeft)),C.expense],
+        ].map(([l,v,col])=>(
+          <div key={l} style={{...S.card,padding:12,textAlign:'center'}}>
+            <p style={{fontSize:10,color:C.muted,marginBottom:3}}>{l}</p>
+            <p style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:500,color:col,lineHeight:1.3}}>{v}</p>
+          </div>
+        ))}
+      </div>
+
+      {milestones.length===0?(
+        <div style={{...S.card,padding:52,textAlign:'center'}}>
+          <p style={{fontSize:44,marginBottom:12}}>🎯</p>
+          <p style={{fontWeight:600,fontSize:16,color:C.text,marginBottom:6}}>Belum ada milestone</p>
+          <p style={{color:C.muted,fontSize:13,marginBottom:18}}>Buat target tabungan pertamamu — beli laptop, liburan, nikah, apapun!</p>
+          <button className="scale" onClick={openAdd} style={{...S.btnPrimary,padding:'12px 24px',fontSize:14}}>+ Buat Milestone Pertama</button>
+        </div>
+      ):(
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
+          {milestones.map(m=>{
+            const p = pct(m.currentAmount, m.targetAmount);
+            const dl = daysLeft(m.deadline);
+            const done = p >= 100;
+            return (
+              <div key={m.id} onClick={()=>setDetail(m.id)} style={{...S.card,padding:16,cursor:'pointer',borderColor:m.color+'44',position:'relative',overflow:'hidden',transition:'background .15s'}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.cardHov}
+                onMouseLeave={e=>e.currentTarget.style.background=C.card}>
+                {done&&<div style={{position:'absolute',top:10,right:10,fontSize:18}}>🏆</div>}
+                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:m.color+'20',border:`1px solid ${m.color}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{m.emoji}</div>
+                  <div style={{minWidth:0,flex:1}}>
+                    <p style={{fontWeight:600,fontSize:14,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</p>
+                    {m.deadline&&<p style={{fontSize:11,color:dl!==null&&dl<14?C.expense:C.muted}}>{dl!==null&&dl<0?'⚠️ Lewat deadline':dl===0?'⏰ Hari ini!':dl+' hari lagi'}</p>}
+                  </div>
+                </div>
+                <div style={{height:6,background:C.surface,borderRadius:3,marginBottom:8,overflow:'hidden'}}>
+                  <div style={{height:'100%',width:`${p}%`,background:m.color,borderRadius:3,transition:'width .4s ease'}}/>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                  <p style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:m.color}}>{fmt(m.currentAmount)}</p>
+                  <p style={{fontSize:12,color:C.muted}}>{p}%</p>
+                </div>
+                <p style={{fontSize:11,color:C.muted}}>Target: {fmt(m.targetAmount)}</p>
+                <div style={{display:'flex',gap:6,marginTop:10}}>
+                  <button onClick={e=>{e.stopPropagation();setDetail(m.id);setShowContrib(true);}} style={{...S.btnPrimary,padding:'6px 10px',fontSize:11,flex:1,borderRadius:6}}>+ Dana</button>
+                  <button onClick={e=>{e.stopPropagation();openEdit(m);}} style={{...S.btnGhost,padding:'6px 10px',fontSize:11}}>✏️</button>
+                  <button onClick={e=>{e.stopPropagation();deleteMilestone(m.id);}} style={{...S.btnDanger,padding:'6px 8px',fontSize:11}}>🗑</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══════════════════ LOGIN SCREEN ═══════════════════
 function LoginScreen({ onLocalMode }) {
   const [mode, setMode] = useState('login');
@@ -1422,13 +1734,6 @@ function LoginScreen({ onLocalMode }) {
     'auth/popup-closed-by-user':'Login dibatalkan.',
     'auth/too-many-requests':'Terlalu banyak percobaan. Tunggu sebentar.',
   }[e.code] || e.message);
-
-  const doGoogle = async () => {
-    if(!fbAuth){setErr('Firebase belum dikonfigurasi.');return;}
-    setLoading(true); setErr('');
-    try{ await signInWithPopup(fbAuth, new GoogleAuthProvider()); }
-    catch(e){ setErr(errMsg(e)); setLoading(false); }
-  };
 
   const doEmail = async () => {
     if(!fbAuth){setErr('Firebase belum dikonfigurasi.');return;}
@@ -1505,17 +1810,7 @@ function LoginScreen({ onLocalMode }) {
             ? <button className="scale" onClick={doReset} disabled={loading} style={{...S.btnPrimary,padding:'12px',width:'100%',fontSize:14,opacity:loading?.6:1}}>{loading?'⏳ Mengirim...':'📧 Kirim Link Reset'}</button>
             : <button className="scale" onClick={doEmail} disabled={loading} style={{...S.btnPrimary,padding:'12px',width:'100%',fontSize:14,opacity:loading?.6:1}}>{loading?'⏳...':(mode==='login'?'Masuk':'Daftar & Mulai')}</button>
           }
-          {mode!=='reset'&&(
-            <>
-              <div style={{display:'flex',alignItems:'center',gap:8,margin:'14px 0'}}>
-                <div style={{flex:1,height:1,background:C.border}}/><span style={{fontSize:11,color:C.muted}}>atau</span><div style={{flex:1,height:1,background:C.border}}/>
-              </div>
-              <button className="scale" onClick={doGoogle} disabled={loading} style={{...S.btnGhost,padding:'11px',width:'100%',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                <svg width="16" height="16" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.3z"/></svg>
-                Masuk dengan Google
-              </button>
-            </>
-          )}
+
         </div>
         <div style={{textAlign:'center',marginTop:14}}>
           <p style={{fontSize:12,color:C.muted,marginBottom:5}}>Mau pakai tanpa akun? Data tersimpan di browser ini saja.</p>
@@ -1661,6 +1956,7 @@ export default function App() {
   const [wallets, setWallets]       = useState(()=> !FB_ON && lsOk ? LS.get('vault_wallets',[]) : []);
   const [categories, setCategories] = useState(()=> !FB_ON && lsOk ? LS.get('vault_categories',[]) : []);
   const [transactions, setTransactions] = useState(()=> !FB_ON && lsOk ? LS.get('vault_transactions',[]) : []);
+  const [milestones, setMilestones] = useState(()=> !FB_ON && lsOk ? LS.get('vault_milestones',[]) : []);
 
   const [view, setView]         = useState('dashboard');
   const [txModal, setTxModal]   = useState(false);
@@ -1684,11 +1980,12 @@ export default function App() {
           setWallets(data.wallets||[]);
           setCategories(data.categories||[]);
           setTransactions(data.transactions||[]);
+          setMilestones(data.milestones||[]);
           setReady(!!data.setupDone);
         }
         setDataLoading(false);
       } else {
-        setWallets([]); setCategories([]); setTransactions([]); setReady(false);
+        setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setReady(false);
       }
     });
     return ()=>unsub();
@@ -1700,7 +1997,7 @@ export default function App() {
   useEffect(()=>{
     if(!ready) return;
     if(useFirebase && fbUser) {
-      saveVault(fbUser.uid, { wallets, categories, transactions, setupDone:true,
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, setupDone:true,
         userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
     } else if(!FB_ON && lsOk) {
       LS.set('vault_wallets', wallets);
@@ -1711,7 +2008,7 @@ export default function App() {
   useEffect(()=>{
     if(!ready) return;
     if(useFirebase && fbUser) {
-      saveVault(fbUser.uid, { wallets, categories, transactions, setupDone:true,
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, setupDone:true,
         userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
     } else if(!FB_ON && lsOk) {
       LS.set('vault_transactions', transactions);
@@ -1722,20 +2019,30 @@ export default function App() {
   useEffect(()=>{
     if(!ready) return;
     if(useFirebase && fbUser) {
-      saveVault(fbUser.uid, { wallets, categories, transactions, setupDone:true,
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, setupDone:true,
         userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
     } else if(!FB_ON && lsOk) {
       LS.set('vault_categories', categories);
     }
   },[categories]);
 
+  useEffect(()=>{
+    if(!ready) return;
+    if(useFirebase && fbUser) {
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, setupDone:true,
+        userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
+    } else if(!FB_ON && lsOk) {
+      LS.set('vault_milestones', milestones);
+    }
+  },[milestones]);
+
   const handleSetupComplete = ({wallets:w, categories:c}) => {
     setWallets(w); setCategories(c);
     if(useFirebase && fbUser) {
-      saveVault(fbUser.uid, { wallets:w, categories:c, transactions:[], setupDone:true,
+      saveVault(fbUser.uid, { wallets:w, categories:c, transactions:[], milestones:[], setupDone:true,
         userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
     } else if(!FB_ON && lsOk) {
-      LS.set('vault_wallets',w); LS.set('vault_categories',c); LS.set('vault_ready',true);
+      LS.set('vault_wallets',w); LS.set('vault_categories',c); LS.set('vault_milestones',[]); LS.set('vault_ready',true);
     }
     setReady(true);
   };
@@ -1752,7 +2059,7 @@ export default function App() {
   const handleLogout = async () => {
     if(fbAuth) try{ await fbSignOut(fbAuth); }catch{}
     setFbUser(null); setLocalMode(false);
-    setWallets([]); setCategories([]); setTransactions([]); setReady(false);
+    setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setReady(false);
     setView('dashboard');
   };
 
@@ -1826,7 +2133,7 @@ export default function App() {
     </div>
   );
 
-  const viewProps = {wallets,categories,transactions,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance};
+  const viewProps = {wallets,categories,transactions,milestones,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance};
 
   return (
     <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'system-ui,-apple-system,sans-serif'}}>
@@ -1851,6 +2158,7 @@ export default function App() {
         {view==='dashboard'   && <Dashboard {...viewProps}/>}
         {view==='transactions' && <TransactionList {...viewProps}/>}
         {view==='analytics'   && <Analytics {...viewProps}/>}
+        {view==='milestones'  && <MilestoneView milestones={milestones} setMilestones={setMilestones} wallets={wallets}/>}
         {view==='wallets'     && <WalletManager wallets={wallets} setWallets={setWallets} transactions={transactions}/>}
         {view==='categories'  && <CategoryManager categories={categories} setCategories={setCategories} transactions={transactions}/>}
         {view==='export'      && <ExportView transactions={transactions} wallets={wallets} categories={categories} onReset={handleResetAll} lsOk={lsOk||useFirebase}/>}
