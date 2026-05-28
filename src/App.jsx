@@ -29,11 +29,12 @@ const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY",
   authDomain:        "vault-app-4bacb.firebaseapp.com",
   projectId:         "vault-app-4bacb",
-  storageBucket:     "vault-app-4bacb.appspot.com",
+  storageBucket:     "vault-app-4bacb.firebasestorage.app",
   messagingSenderId: "645133095463",
   appId:             "1:645133095463:web:927514084e8908cc53f402",
+  measurementId:     "G-6V63JXXMB9",
 };
-// 👑 Email akun kamu (admin) — satu-satunya yang bisa lihat semua data
+// 👑 Admin — bisa lihat semua data user
 const ADMIN_EMAIL = "zaidan1408@gmail.com";
 
 const FB_ON = FIREBASE_CONFIG.apiKey !== "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY";
@@ -71,12 +72,17 @@ const DEF_INC = [
 ];
 
 const DEF_EXP = [
-  {name:'Makan & Minum',emoji:'🍔',color:'#FB923C'},{name:'Transportasi',emoji:'🚗',color:'#38BDF8'},
-  {name:'Belanja',emoji:'🛒',color:'#F472B6'},{name:'Hiburan',emoji:'🎮',color:'#8B5CF6'},
-  {name:'Kos / Sewa',emoji:'🏠',color:'#FF3D60'},{name:'Kesehatan',emoji:'💊',color:'#4ADE80'},
-  {name:'Tagihan',emoji:'⚡',color:'#FBBF24'},{name:'Perawatan Diri',emoji:'🛁',color:'#F9A8D4'},
-  {name:'Pendidikan',emoji:'📚',color:'#60A5FA'},{name:'Olahraga',emoji:'🏋️',color:'#6EE7B7'},
-  {name:'Lainnya',emoji:'💸',color:'#3D5580'},
+  {name:'Makan & Minum',emoji:'🍔',color:'#FB923C',bucket:'needs'},
+  {name:'Transportasi',emoji:'🚗',color:'#38BDF8',bucket:'needs'},
+  {name:'Kos / Sewa',emoji:'🏠',color:'#FF3D60',bucket:'needs'},
+  {name:'Kesehatan',emoji:'💊',color:'#4ADE80',bucket:'needs'},
+  {name:'Tagihan',emoji:'⚡',color:'#FBBF24',bucket:'needs'},
+  {name:'Pendidikan',emoji:'📚',color:'#60A5FA',bucket:'needs'},
+  {name:'Belanja',emoji:'🛒',color:'#F472B6',bucket:'wants'},
+  {name:'Hiburan',emoji:'🎮',color:'#8B5CF6',bucket:'wants'},
+  {name:'Perawatan Diri',emoji:'🛁',color:'#F9A8D4',bucket:'wants'},
+  {name:'Olahraga',emoji:'🏋️',color:'#6EE7B7',bucket:'wants'},
+  {name:'Lainnya',emoji:'💸',color:'#3D5580',bucket:null},
 ];
 
 const EMOJIS = ['😊','🍔','🚗','🏠','💊','📚','🎮','✈️','🎁','💼','📱','⚡','🛒','☕','💅','🏋️','🐾','🎨','🎵','💡','🎬','📦','🔧','🌿'];
@@ -125,6 +131,35 @@ async function parseVoice(text, wallets, categories) {
   } catch(e) { return null; }
 }
 
+// ═══════════════════ RECEIPT OCR ═══════════════════
+async function parseReceipt(base64, mediaType, wallets, categories) {
+  const wl = wallets.map(w=>w.name).join(', ');
+  const ec = categories.filter(c=>c.type==='expense'||c.type==='both').map(c=>c.name).join(', ');
+  const ic = categories.filter(c=>c.type==='income'||c.type==='both').map(c=>c.name).join(', ');
+  const prompt = `Kamu adalah OCR parser struk/bukti transaksi keuangan Indonesia. Analisis gambar dan ekstrak detail transaksi. Return HANYA JSON valid tanpa markdown:
+{"type":"income atau expense","amount":integer_IDR,"description":"deskripsi singkat max 40 char","category":"nama kategori paling cocok dari list","wallet":"nama wallet paling cocok dari list","date":"YYYY-MM-DD","merchant":"nama toko/pengirim/penerima"}
+
+Wallet tersedia: ${wl}
+Kategori expense: ${ec}
+Kategori income: ${ic}
+Hari ini: ${todayStr()}
+
+Aturan: struk belanja/QRIS=expense, bukti transfer keluar=expense, transfer masuk=income, nota penjualan=income.
+Kalau bukan bukti transaksi keuangan, return {"error":"bukan bukti transaksi"}.`;
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,
+        messages:[{role:"user",content:[
+          {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
+          {type:"text",text:prompt}
+        ]}]})
+    });
+    const d = await res.json();
+    return JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
+  } catch(e){ return null; }
+}
+
 // ═══════════════════ STYLES ═══════════════════
 const S = {
   input: {background:C.surface,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:'10px 14px',width:'100%',outline:'none',fontSize:14,fontFamily:'inherit'},
@@ -139,7 +174,7 @@ function Onboarding({ onComplete }) {
   const [step, setStep] = useState(0);
   const [wallets, setWallets] = useState([]);
   const [categories, setCategories] = useState({
-    income: DEF_INC.map((c,i)=>({...c, id:uid(), type:'income', color:c.color||PALETTE[i%PALETTE.length]})),
+    income: DEF_INC.map((c,i)=>({...c, id:uid(), type:'income', bucket:'income', color:c.color||PALETTE[i%PALETTE.length]})),
     expense: DEF_EXP.map((c,i)=>({...c, id:uid(), type:'expense', color:c.color||PALETTE[i%PALETTE.length]})),
   });
   const [wForm, setWForm] = useState({name:'',type:'bank',balance:'',color:PALETTE[0],emoji:'🏦'});
@@ -384,226 +419,176 @@ function TxModal({ wallets, categories, editTx, onClose, onSave }) {
     date: editTx?.date||todayStr(),
     note: editTx?.note||'',
   });
-  const [listening, setListening] = useState(false);
-  const [voiceText, setVoiceText] = useState('');
-  const [aiStatus, setAiStatus] = useState('');
+  const [inputMode, setInputMode] = useState('form'); // 'form'|'ai'
+  const [aiText,   setAiText]   = useState('');
+  const [aiStatus, setAiStatus] = useState(''); // 'parsing'|'done'|'error'
   const [aiResult, setAiResult] = useState(null);
-  const [textInput, setTextInput] = useState('');
-  const [inputMode, setInputMode] = useState('form');
-  const [micError, setMicError] = useState('');
-  const [micSupported] = useState(()=>!!(window.SpeechRecognition||window.webkitSpeechRecognition));
-  const recogRef = useRef(null);
+  const [imgPreview, setImgPreview] = useState(null);
+  const [imgFile,    setImgFile]    = useState(null);
+  const [imgStatus,  setImgStatus]  = useState(''); // 'parsing'|'done'|'error'
+  const fileRef = useRef(null);
 
   const filteredCats = categories.filter(c=>c.type===form.type||c.type==='both');
-
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
 
-  const startListening = () => {
-    setMicError('');
-    const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
-    if (!SR) { setMicError('Browser tidak support mikrofon. Gunakan input teks di bawah.'); return; }
-    try {
-      const r = new SR();
-      r.lang='id-ID'; r.continuous=false; r.interimResults=false;
-      r.onresult = e => {
-        const transcript = e.results?.[0]?.[0]?.transcript||'';
-        if(transcript) { setVoiceText(transcript); setMicError(''); }
-        else setMicError('Tidak terdengar. Coba lagi.');
-        setListening(false);
-      };
-      r.onerror = (e) => {
-        setListening(false);
-        const errMap = {'not-allowed':'Izin mikrofon ditolak. Cek izin di browser.','no-speech':'Tidak ada suara. Coba lagi.','network':'Gagal koneksi jaringan.','aborted':'Rekaman dibatalkan.'};
-        setMicError(errMap[e.error]||'Gagal rekam. Gunakan input teks.');
-      };
-      r.onend = () => setListening(false);
-      recogRef.current = r;
-      r.start();
-      setListening(true); setVoiceText(''); setAiResult(null); setAiStatus('');
-    } catch(e) {
-      setMicError('Gagal akses mikrofon. Gunakan input teks.');
-      setListening(false);
-    }
-  };
-
-  const stopListening = () => { try{recogRef.current?.stop();}catch(e){} setListening(false); };
-
-  const handleParse = async (txt) => {
-    const t = (txt||voiceText||textInput||'').trim();
-    if (!t) { setMicError('Tulis atau ucapkan deskripsi transaksi dulu.'); return; }
-    setAiStatus('parsing'); setMicError('');
+  // ── AI text parse ──
+  const handleParse = async () => {
+    const t = aiText.trim();
+    if(!t){ setAiStatus('error'); return; }
+    setAiStatus('parsing'); setAiResult(null);
     try {
       const result = await parseVoice(t, wallets, categories);
-      if (result && result.amount && result.type) {
-        setAiResult(result); setAiStatus('done');
-      } else { setAiStatus('error'); }
-    } catch(e) { setAiStatus('error'); }
+      if(result && result.amount && result.type){ setAiResult(result); setAiStatus('done'); }
+      else setAiStatus('error');
+    } catch{ setAiStatus('error'); }
   };
 
+  // ── Image OCR ──
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    setImgFile(file); setAiResult(null); setAiStatus(''); setImgStatus('');
+    const reader = new FileReader();
+    reader.onload = ev => setImgPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageParse = async () => {
+    if(!imgFile) return;
+    setImgStatus('parsing'); setAiResult(null);
+    try {
+      const base64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=ev=>res(ev.target.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(imgFile); });
+      const result = await parseReceipt(base64, imgFile.type||'image/jpeg', wallets, categories);
+      if(result && !result.error && result.amount){ setAiResult(result); setImgStatus('done'); setAiStatus('done'); }
+      else{ setImgStatus('error'); }
+    } catch{ setImgStatus('error'); }
+  };
+
+  // ── Apply AI result to form ──
   const applyResult = () => {
-    if (!aiResult) return;
+    if(!aiResult) return;
     const wallet = wallets.find(w=>w.name.toLowerCase()===aiResult.wallet?.toLowerCase())||wallets[0];
     const cat = categories.find(c=>c.name.toLowerCase()===aiResult.category?.toLowerCase()&&(c.type===aiResult.type||c.type==='both'));
     setForm(p=>({...p,
-      type: aiResult.type||p.type,
-      amount: aiResult.amount||p.amount,
-      walletId: wallet?.id||p.walletId,
-      categoryId: cat?.id||p.categoryId,
-      description: aiResult.description||p.description,
-      date: aiResult.date||p.date,
+      type:aiResult.type||p.type, amount:aiResult.amount||p.amount,
+      walletId:wallet?.id||p.walletId, categoryId:cat?.id||p.categoryId,
+      description:aiResult.description||aiResult.merchant||p.description,
+      date:aiResult.date||p.date,
     }));
-    setAiResult(null); setAiStatus(''); setVoiceText(''); setTextInput('');
+    setAiResult(null); setAiStatus(''); setAiText(''); setImgPreview(null); setImgFile(null); setImgStatus('');
     setInputMode('form');
   };
 
   const handleSubmit = () => {
-    if (!form.amount||!form.walletId||!form.categoryId) return;
+    if(!form.amount||!form.walletId||!form.categoryId||!form.description) return;
     onSave({...form, amount:parseFloat(form.amount)||0});
   };
-
   const isValid = form.amount&&form.walletId&&form.categoryId&&form.description;
 
-  const overlayStyle = {position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 16px'};
-  const boxStyle = {background:C.card,border:`1px solid ${C.border}`,borderRadius:'16px 16px 12px 12px',width:'100%',maxWidth:540,maxHeight:'92vh',overflowY:'auto'};
-
   return (
-    <div style={overlayStyle} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
-      <div style={boxStyle}>
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 16px'}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:'16px 16px 12px 12px',width:'100%',maxWidth:540,maxHeight:'92vh',overflowY:'auto'}}>
         {/* Header */}
-        <div style={{padding:'20px 20px 0',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-          <h3 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:18,color:C.text}}>{editTx?'Edit Transaksi':'Tambah Transaksi'}</h3>
-          <button onClick={onClose} style={{...S.btnGhost,padding:'6px 10px'}}>✕</button>
+        <div style={{padding:'18px 20px 0',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h3 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:17,color:C.text}}>{editTx?'Edit Transaksi':'Tambah Transaksi'}</h3>
+          <button onClick={onClose} style={{...S.btnGhost,padding:'5px 10px'}}>✕</button>
         </div>
-
         <div style={{padding:'0 20px 24px'}}>
           {/* Type toggle */}
-          <div style={{display:'flex',gap:0,background:C.surface,borderRadius:8,padding:3,border:`1px solid ${C.border}`,marginBottom:16}}>
+          <div style={{display:'flex',gap:0,background:C.surface,borderRadius:8,padding:3,border:`1px solid ${C.border}`,marginBottom:14}}>
             {['expense','income'].map(t=>(
               <button key={t} onClick={()=>set('type',t)} style={{flex:1,padding:'9px',borderRadius:6,border:'none',cursor:'pointer',fontWeight:700,fontSize:13,background:form.type===t?(t==='expense'?'rgba(255,61,96,.2)':'rgba(27,194,120,.2)'):'transparent',color:form.type===t?(t==='expense'?C.expense:C.income):C.muted,transition:'all .15s'}}>
                 {t==='expense'?'📉 Pengeluaran':'📈 Pemasukan'}
               </button>
             ))}
           </div>
-
-          {/* Input mode tabs */}
+          {/* Mode tabs */}
           <div style={{display:'flex',gap:6,marginBottom:14}}>
-            {[['form','📝 Form'],['voice','🎤 Voice / AI']].map(([m,l])=>(
-              <button key={m} onClick={()=>setInputMode(m)} style={{padding:'7px 14px',borderRadius:6,border:`1px solid ${inputMode===m?C.gold:C.border}`,background:inputMode===m?'rgba(201,145,58,.1)':'transparent',color:inputMode===m?C.gold:C.muted,fontSize:13,cursor:'pointer',fontWeight:inputMode===m?600:400}}>
-                {l}
-              </button>
+            {[['form','📝 Form Manual'],['ai','✨ AI Input']].map(([m,l])=>(
+              <button key={m} onClick={()=>setInputMode(m)} style={{padding:'7px 14px',borderRadius:6,border:`1px solid ${inputMode===m?C.gold:C.border}`,background:inputMode===m?'rgba(201,145,58,.1)':'transparent',color:inputMode===m?C.gold:C.muted,fontSize:13,cursor:'pointer',fontWeight:inputMode===m?600:400}}>{l}</button>
             ))}
           </div>
 
-          {/* VOICE MODE */}
-          {inputMode==='voice'&&(
-            <div style={{...S.card,padding:16,marginBottom:16}}>
-              <p style={{fontSize:13,color:C.muted,marginBottom:12}}>Ceritakan transaksinya — AI akan otomatis mengisi form.</p>
-              <p style={{fontSize:12,color:C.gold,marginBottom:12,fontStyle:'italic'}}>Contoh: "tadi beli makan siang 25rb dari BRI" atau "gaji bulan ini masuk 5jt ke BCA"</p>
+          {/* ── AI INPUT MODE ── */}
+          {inputMode==='ai'&&(
+            <div style={{...S.card,padding:14,marginBottom:14}}>
+              <p style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:4}}>✍️ Ceritakan Transaksinya</p>
+              <p style={{fontSize:11,color:C.muted,marginBottom:10}}>Tulis bebas: "tadi bayar makan siang di warteg 25rb dari BRI" atau "gaji 5jt masuk BCA"</p>
+              <textarea className="vi" style={{...S.input,height:72,resize:'none',marginBottom:8}} placeholder={'Ceritakan transaksinya...\nContoh: "habis belanja di indomaret 87rb pakai gopay"'} value={aiText} onChange={e=>setAiText(e.target.value)}/>
+              <button className="scale" onClick={handleParse} disabled={aiStatus==='parsing'} style={{...S.btnPrimary,padding:'10px',width:'100%',fontSize:13,marginBottom:12,opacity:aiStatus==='parsing'?.7:1}}>
+                {aiStatus==='parsing'?'⏳ AI sedang menganalisis...':'✨ Parse dengan AI'}
+              </button>
 
-              {/* Mic button */}
-              {micSupported&&(
-                <div style={{marginBottom:12}}>
-                  <button onClick={listening?stopListening:startListening} style={{...S.btnPrimary,padding:'12px 16px',borderRadius:8,display:'flex',alignItems:'center',gap:8,fontSize:13,width:'100%',justifyContent:'center',background:listening?`linear-gradient(135deg,${C.expense},#ff6b8a)`:undefined}}>
-                    {listening?(<><span style={{width:10,height:10,borderRadius:'50%',background:'#fff',display:'inline-block',animation:'pulse 1s ease-in-out infinite'}}/>  Mendengarkan... (tap untuk stop)</>):(<>🎤 Mulai Rekam Suara</>)}
-                  </button>
-                </div>
-              )}
-
-              {/* Error message */}
-              {micError&&(
-                <div style={{background:'rgba(255,61,96,.1)',border:`1px solid rgba(255,61,96,.3)`,borderRadius:8,padding:10,marginBottom:10}}>
-                  <p style={{fontSize:13,color:C.expense}}>⚠️ {micError}</p>
-                </div>
-              )}
-
-              {/* Separator */}
-              {micSupported&&<p style={{textAlign:'center',fontSize:12,color:C.muted,marginBottom:10}}>— atau ketik langsung —</p>}
-
-              {/* Text input */}
-              <div style={{marginBottom:12}}>
-                <textarea className="vi" style={{...S.input,height:72,resize:'none'}} placeholder={'Contoh:\n"beli makan siang di warteg 25rb dari BRI"\n"gaji bulan ini 5jt masuk ke BCA"'} value={textInput} onChange={e=>setTextInput(e.target.value)}/>
-                <button className="scale" onClick={()=>handleParse(textInput)} disabled={aiStatus==='parsing'} style={{...S.btnPrimary,padding:'10px',width:'100%',marginTop:6,fontSize:13,opacity:aiStatus==='parsing'?.7:1}}>
-                  {aiStatus==='parsing'?'⏳ AI sedang menganalisis...':'✨ Parse dengan AI'}
-                </button>
+              {/* Divider */}
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                <div style={{flex:1,height:1,background:C.border}}/><span style={{fontSize:11,color:C.muted}}>atau upload foto struk / bukti transfer</span><div style={{flex:1,height:1,background:C.border}}/>
               </div>
 
-              {/* Voice transcript */}
-              {voiceText&&(
-                <div style={{background:C.surface,borderRadius:8,padding:12,marginBottom:12,border:`1px solid ${C.border}`}}>
-                  <p style={{fontSize:11,color:C.muted,marginBottom:4}}>🎤 Terdengar:</p>
-                  <p style={{fontSize:14,color:C.text,fontStyle:'italic',marginBottom:8}}>"{voiceText}"</p>
-                  <button className="scale" onClick={()=>handleParse(voiceText)} style={{...S.btnPrimary,padding:'8px 14px',fontSize:12,width:'100%'}} disabled={aiStatus==='parsing'}>
-                    {aiStatus==='parsing'?'⏳ Menganalisis...':'✨ Parse Suara ini dengan AI'}
+              {/* Image upload */}
+              <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{display:'none'}}/>
+              {!imgPreview?(
+                <button className="scale" onClick={()=>fileRef.current?.click()} style={{...S.btnGhost,padding:'12px',width:'100%',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                  📷 Upload Foto Struk / Bukti Transaksi
+                </button>
+              ):(
+                <div>
+                  <div style={{position:'relative',marginBottom:8}}>
+                    <img src={imgPreview} alt="preview" style={{width:'100%',maxHeight:180,objectFit:'contain',borderRadius:8,border:`1px solid ${C.border}`}}/>
+                    <button onClick={()=>{setImgPreview(null);setImgFile(null);setImgStatus('');}} style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,.6)',border:'none',borderRadius:'50%',width:24,height:24,cursor:'pointer',color:'#fff',fontSize:12}}>✕</button>
+                  </div>
+                  <button className="scale" onClick={handleImageParse} disabled={imgStatus==='parsing'} style={{...S.btnPrimary,padding:'10px',width:'100%',fontSize:13,background:`linear-gradient(135deg,#7C3AED,#A855F7)`,opacity:imgStatus==='parsing'?.7:1}}>
+                    {imgStatus==='parsing'?'🔍 AI sedang membaca struk...':'🔍 Baca Struk dengan AI'}
                   </button>
+                  {imgStatus==='error'&&<p style={{color:C.expense,fontSize:12,textAlign:'center',marginTop:6}}>❌ Gagal baca. Pastikan gambar jelas atau coba foto ulang.</p>}
                 </div>
               )}
 
-              {/* AI result */}
+              {/* AI Result preview */}
               {aiStatus==='done'&&aiResult&&(
-                <div style={{background:'rgba(27,194,120,.08)',border:`1px solid rgba(27,194,120,.25)`,borderRadius:8,padding:14,marginBottom:8}}>
-                  <p style={{fontSize:13,color:C.income,fontWeight:600,marginBottom:10}}>✅ AI berhasil menganalisis:</p>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,fontSize:13,marginBottom:12}}>
-                    {[['Tipe',aiResult.type==='income'?'📈 Pemasukan':'📉 Pengeluaran'],['Jumlah',fmt(aiResult.amount)],['Deskripsi',aiResult.description||'-'],['Kategori',aiResult.category||'-'],['Wallet',aiResult.wallet||'-'],['Tanggal',aiResult.date||'-']].map(([k,v])=>(
+                <div style={{background:'rgba(27,194,120,.08)',border:`1px solid rgba(27,194,120,.25)`,borderRadius:8,padding:12,marginTop:12}}>
+                  <p style={{fontSize:12,color:C.income,fontWeight:700,marginBottom:8}}>✅ Berhasil diparse:</p>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                    {[['Tipe',aiResult.type==='income'?'📈 Pemasukan':'📉 Pengeluaran'],['Jumlah',fmt(aiResult.amount)],['Deskripsi',aiResult.description||aiResult.merchant||'-'],['Kategori',aiResult.category||'-'],['Wallet',aiResult.wallet||'-'],['Tanggal',aiResult.date||'-']].map(([k,v])=>(
                       <div key={k} style={{background:C.surface,borderRadius:6,padding:'6px 10px'}}>
-                        <p style={{color:C.muted,fontSize:10,marginBottom:2}}>{k}</p>
-                        <p style={{color:C.text,fontWeight:500,fontSize:13}}>{v}</p>
+                        <p style={{fontSize:10,color:C.muted,marginBottom:1}}>{k}</p>
+                        <p style={{fontSize:12,fontWeight:500,color:C.text}}>{v}</p>
                       </div>
                     ))}
                   </div>
-                  <button className="scale" onClick={applyResult} style={{...S.btnPrimary,padding:'10px 14px',fontSize:13,width:'100%'}}>✓ Terapkan ke Form →</button>
+                  <button className="scale" onClick={applyResult} style={{...S.btnPrimary,padding:'9px',width:'100%',marginTop:10,fontSize:13}}>✓ Terapkan ke Form →</button>
                 </div>
               )}
-              {aiStatus==='error'&&(
-                <div style={{background:'rgba(255,61,96,.08)',border:`1px solid rgba(255,61,96,.2)`,borderRadius:8,padding:12}}>
-                  <p style={{color:C.expense,fontSize:13}}>❌ AI tidak bisa parse. Coba tulis lebih detail, contoh: "beli kopi 25rb dari BRI"</p>
-                </div>
-              )}
+              {aiStatus==='error'&&<p style={{color:C.expense,fontSize:12,textAlign:'center',marginTop:8}}>❌ Gagal parse. Coba tulis lebih detail atau spesifik.</p>}
             </div>
           )}
 
-          {/* FORM MODE */}
+          {/* ── FORM FIELDS ── */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-            <div>
-              <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Jumlah (Rp)</label>
-              <input className="vi" style={{...S.input}} type="number" placeholder="0" value={form.amount} onChange={e=>set('amount',e.target.value)}/>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Tanggal</label>
-              <input className="vi" style={{...S.input}} type="date" value={form.date} onChange={e=>set('date',e.target.value)}/>
-            </div>
+            <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jumlah (Rp) *</label>
+              <input className="vi" style={{...S.input}} type="number" placeholder="0" value={form.amount} onChange={e=>set('amount',e.target.value)}/></div>
+            <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Tanggal</label>
+              <input className="vi" style={{...S.input}} type="date" value={form.date} onChange={e=>set('date',e.target.value)}/></div>
           </div>
-
-          <div style={{marginBottom:10}}>
-            <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Deskripsi *</label>
-            <input className="vi" style={{...S.input}} placeholder="Deskripsi transaksi" value={form.description} onChange={e=>set('description',e.target.value)}/>
-          </div>
-
+          <div style={{marginBottom:10}}><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Deskripsi *</label>
+            <input className="vi" style={{...S.input}} placeholder="Deskripsi transaksi" value={form.description} onChange={e=>set('description',e.target.value)}/></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-            <div>
-              <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Wallet *</label>
+            <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Wallet *</label>
               <select className="vi" style={{...S.input}} value={form.walletId} onChange={e=>set('walletId',e.target.value)}>
                 <option value="">Pilih wallet</option>
                 {wallets.map(w=><option key={w.id} value={w.id}>{w.emoji} {w.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Kategori *</label>
+              </select></div>
+            <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Kategori *</label>
               <select className="vi" style={{...S.input}} value={form.categoryId} onChange={e=>set('categoryId',e.target.value)}>
                 <option value="">Pilih kategori</option>
                 {filteredCats.map(c=><option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
-              </select>
-            </div>
+              </select></div>
           </div>
-
-          <div style={{marginBottom:20}}>
-            <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Catatan (opsional)</label>
-            <textarea className="vi" style={{...S.input,height:60,resize:'vertical'}} placeholder="Catatan tambahan..." value={form.note} onChange={e=>set('note',e.target.value)}/>
-          </div>
-
+          <div style={{marginBottom:18}}><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Catatan</label>
+            <textarea className="vi" style={{...S.input,height:52,resize:'vertical'}} placeholder="Opsional" value={form.note} onChange={e=>set('note',e.target.value)}/></div>
           <div style={{display:'flex',gap:8}}>
             <button className="scale" style={{...S.btnGhost,padding:'12px 20px'}} onClick={onClose}>Batal</button>
             <button className="scale" onClick={handleSubmit} style={{...S.btnPrimary,padding:'12px',flex:1,opacity:isValid?1:.5}} disabled={!isValid}>
-              {editTx?'💾 Simpan Perubahan':'+ Tambah Transaksi'}
+              {editTx?'💾 Simpan':'+ Tambah Transaksi'}
             </button>
           </div>
         </div>
@@ -612,16 +597,216 @@ function TxModal({ wallets, categories, editTx, onClose, onSave }) {
   );
 }
 
+// ═══════════════════ TRANSFER MODAL ═══════════════════
+function TransferModal({ wallets, onClose, onTransfer }) {
+  const [fromId, setFromId] = useState(wallets[0]?.id||'');
+  const [toId,   setToId]   = useState(wallets[1]?.id||wallets[0]?.id||'');
+  const [amount, setAmount] = useState('');
+  const [date,   setDate]   = useState(todayStr());
+  const [note,   setNote]   = useState('');
+  const [err,    setErr]    = useState('');
+
+  const fromWallet = wallets.find(w=>w.id===fromId);
+  const toWallet   = wallets.find(w=>w.id===toId);
+
+  const doTransfer = () => {
+    const amt = parseFloat(amount)||0;
+    if(!amt){ setErr('Masukkan jumlah transfer.'); return; }
+    if(fromId===toId){ setErr('Wallet asal dan tujuan tidak boleh sama.'); return; }
+    if(amt > (fromWallet?.balance||0)){ setErr('Saldo tidak cukup.'); return; }
+    onTransfer({ fromId, toId, amount:amt, date, note });
+    onClose();
+  };
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 16px'}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:'16px 16px 12px 12px',width:'100%',maxWidth:460,padding:24}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}>
+          <h3 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:17,color:C.text}}>↕️ Pindahkan Uang</h3>
+          <button onClick={onClose} style={{...S.btnGhost,padding:'5px 10px'}}>✕</button>
+        </div>
+
+        {/* From → To visual */}
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
+          <div style={{flex:1,background:C.surface,borderRadius:10,padding:10,border:`1px solid ${C.border}`}}>
+            <p style={{fontSize:10,color:C.muted,marginBottom:4}}>Dari</p>
+            <select className="vi" style={{...S.input,padding:'6px 8px',fontSize:13}} value={fromId} onChange={e=>setFromId(e.target.value)}>
+              {wallets.map(w=><option key={w.id} value={w.id}>{w.emoji} {w.name}</option>)}
+            </select>
+            {fromWallet&&<p className="vault-amt" style={{fontSize:12,color:C.muted,marginTop:4}}>Saldo: {fmt(fromWallet.balance)}</p>}
+          </div>
+          <div style={{fontSize:22,color:C.gold,flexShrink:0}}>→</div>
+          <div style={{flex:1,background:C.surface,borderRadius:10,padding:10,border:`1px solid ${C.border}`}}>
+            <p style={{fontSize:10,color:C.muted,marginBottom:4}}>Ke</p>
+            <select className="vi" style={{...S.input,padding:'6px 8px',fontSize:13}} value={toId} onChange={e=>setToId(e.target.value)}>
+              {wallets.map(w=><option key={w.id} value={w.id}>{w.emoji} {w.name}</option>)}
+            </select>
+            {toWallet&&<p className="vault-amt" style={{fontSize:12,color:C.muted,marginTop:4}}>Saldo: {fmt(toWallet.balance)}</p>}
+          </div>
+        </div>
+
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jumlah Transfer (Rp) *</label>
+          <input className="vi" style={{...S.input,fontSize:18,fontFamily:'DM Mono,monospace',textAlign:'center'}} type="number" placeholder="0" autoFocus value={amount} onChange={e=>{setAmount(e.target.value);setErr('');}}/>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
+          <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Tanggal</label>
+            <input className="vi" style={{...S.input}} type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+          <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Catatan</label>
+            <input className="vi" style={{...S.input}} placeholder="Opsional" value={note} onChange={e=>setNote(e.target.value)}/></div>
+        </div>
+        {err&&<p style={{color:C.expense,fontSize:13,marginBottom:8}}>⚠️ {err}</p>}
+        <div style={{display:'flex',gap:8}}>
+          <button className="scale" style={{...S.btnGhost,padding:'12px 18px'}} onClick={onClose}>Batal</button>
+          <button className="scale" style={{...S.btnPrimary,padding:'12px',flex:1,fontSize:14}} onClick={doTransfer}>↕️ Transfer Sekarang</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ WALLET DETAIL ═══════════════════
+function WalletDetail({ wallet, wallets, transactions, categories, onClose, onTransfer, onEdit, onAddTx }) {
+  const [search, setSearch] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+
+  const walletTxs = transactions.filter(t => t.walletId === wallet.id);
+  const filtered = walletTxs.filter(t =>
+    (!search || t.description?.toLowerCase().includes(search.toLowerCase())) &&
+    (!filterMonth || t.date?.startsWith(filterMonth))
+  );
+
+  const getCat = id => categories.find(c=>c.id===id);
+  const months = [...new Set(walletTxs.map(t=>monthStr(t.date)))].sort().reverse();
+  const thisM  = currentMonth();
+
+  const monthInc = walletTxs.filter(t=>t.type==='income'&&t.date?.startsWith(thisM)).reduce((s,t)=>s+t.amount,0);
+  const monthExp = walletTxs.filter(t=>t.type==='expense'&&t.date?.startsWith(thisM)).reduce((s,t)=>s+t.amount,0);
+
+  // Group filtered txs by month
+  const grouped = {};
+  filtered.forEach(t => {
+    const m = monthStr(t.date);
+    if(!grouped[m]) grouped[m]=[];
+    grouped[m].push(t);
+  });
+  const sortedMonths = Object.keys(grouped).sort().reverse();
+
+  return (
+    <div style={{position:'fixed',inset:0,background:C.bg,zIndex:150,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <style>{`.wd-tx:hover{background:${C.surface}!important}`}</style>
+
+      {/* Header */}
+      <div style={{padding:'16px 20px',display:'flex',alignItems:'center',gap:12,background:C.surface,borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+        <button onClick={onClose} style={{...S.btnGhost,padding:'8px 12px',fontSize:16,flexShrink:0}}>←</button>
+        <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:16,color:C.text,flex:1}}>Rincian Wallet</h2>
+      </div>
+
+      <div style={{flex:1,overflowY:'auto'}}>
+        {/* Hero section */}
+        <div style={{padding:'28px 20px 20px',textAlign:'center',background:`linear-gradient(180deg, ${C.surface} 0%, ${C.bg} 100%)`}}>
+          <div style={{width:64,height:64,borderRadius:16,background:wallet.color+'20',border:`1px solid ${wallet.color}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,margin:'0 auto 12px'}}>{wallet.emoji}</div>
+          <p style={{fontSize:13,color:C.muted,marginBottom:4}}>{WALLET_TYPES.find(t=>t.value===wallet.type)?.label||wallet.type}</p>
+          <p style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:18,color:C.text,marginBottom:4}}>{wallet.name}</p>
+          <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:34,fontWeight:500,color:C.text,marginBottom:16}}>{fmt(wallet.balance)}</p>
+
+          {/* Action buttons */}
+          <div style={{display:'flex',justifyContent:'center',gap:12}}>
+            {[
+              {icon:'➕',label:'Tambah Tx',action:()=>{onAddTx(wallet.id);}},
+              {icon:'↕️',label:'Transfer',action:()=>onTransfer(wallet)},
+              {icon:'✏️',label:'Edit Wallet',action:()=>onEdit(wallet)},
+            ].map(({icon,label,action})=>(
+              <button key={label} onClick={action} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:'10px 14px',cursor:'pointer',color:C.text,minWidth:76,transition:'all .15s'}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=C.gold;e.currentTarget.style.color=C.gold;}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text;}}>
+                <span style={{fontSize:20}}>{icon}</span>
+                <span style={{fontSize:11}}>{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* This month stats */}
+        <div style={{padding:'0 16px 16px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
+            {[
+              [walletTxs.length+' tx','Total Transaksi',C.text],
+              [fmt(monthInc),'Masuk bulan ini',C.income],
+              [fmt(monthExp),'Keluar bulan ini',C.expense],
+            ].map(([v,l,col])=>(
+              <div key={l} style={{...S.card,padding:10,textAlign:'center'}}>
+                <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:col,marginBottom:2}}>{v}</p>
+                <p style={{fontSize:10,color:C.muted,lineHeight:1.2}}>{l}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Search + filter */}
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <input className="vi" style={{...S.input,flex:1}} placeholder="🔍 Cari transaksi..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            <select className="vi" style={{...S.input,width:'auto',padding:'8px 10px',fontSize:12}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
+              <option value="">Semua</option>
+              {months.map(m=><option key={m} value={m}>{monthLabel(m)} {m.split('-')[0]}</option>)}
+            </select>
+          </div>
+
+          {/* Transaction list grouped by month */}
+          {walletTxs.length===0?(
+            <div style={{...S.card,padding:40,textAlign:'center'}}>
+              <p style={{fontSize:28,marginBottom:8}}>📭</p>
+              <p style={{color:C.muted,fontSize:13}}>Belum ada transaksi di wallet ini.</p>
+              <button className="scale" onClick={()=>onAddTx(wallet.id)} style={{...S.btnPrimary,padding:'10px 20px',fontSize:13,marginTop:12}}>+ Tambah Transaksi</button>
+            </div>
+          ):(
+            sortedMonths.map(m=>(
+              <div key={m} style={{marginBottom:12}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 4px',marginBottom:4}}>
+                  <p style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.5px'}}>{monthLabel(m)} {m.split('-')[0]}</p>
+                  <p className="vault-amt" style={{fontSize:11,color:C.muted}}>
+                    {fmt(grouped[m].filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0))} masuk · {fmt(grouped[m].filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0))} keluar
+                  </p>
+                </div>
+                <div style={{...S.card,overflow:'hidden'}}>
+                  {grouped[m].map((tx,i)=>{
+                    const cat=getCat(tx.categoryId);
+                    return (
+                      <div key={tx.id} className="wd-tx" style={{display:'flex',alignItems:'center',padding:'11px 14px',borderBottom:i<grouped[m].length-1?`1px solid ${C.border}`:'none',gap:10,transition:'background .1s'}}>
+                        <div style={{width:34,height:34,borderRadius:8,background:(cat?.color||C.muted)+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{cat?.emoji||'💸'}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <p style={{fontSize:13,color:C.text,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description}</p>
+                          <p style={{fontSize:11,color:C.muted}}>{cat?.name||'?'} · {fmtDate(tx.date)}</p>
+                        </div>
+                        <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:tx.type==='income'?C.income:C.expense,flexShrink:0}}>
+                          {tx.type==='income'?'+':'-'}{fmt(tx.amount)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════ SIDEBAR ═══════════════════
-function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, lsOk, fbUser, isAdmin, localMode, onLogout }) {
+function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, lsOk, fbUser, isAdmin, localMode, onLogout, onToggleHide, hideAmounts, recurringDue }) {
+  const today = new Date().toISOString().split('T')[0];
   const navItems = [
-    {id:'dashboard',icon:'🏠',label:'Dashboard'},
+    {id:'dashboard',  icon:'🏠', label:'Dashboard'},
     {id:'transactions',icon:'📋',label:'Transaksi'},
-    {id:'analytics',icon:'📊',label:'Analitik'},
-    {id:'milestones',icon:'🎯',label:'Milestone'},
-    {id:'wallets',icon:'💳',label:'Wallet'},
-    {id:'categories',icon:'🏷️',label:'Kategori'},
-    {id:'export',icon:'📤',label:'Export'},
+    {id:'analytics',  icon:'📊', label:'Analitik'},
+    {id:'budget',     icon:'🎯', label:'Budget'},
+    {id:'milestones', icon:'⭐', label:'Milestone'},
+    {id:'recurring',  icon:'🔄', label:'Berulang'},
+    {id:'debts',      icon:'💸', label:'Hutang/Piutang'},
+    {id:'wallets',    icon:'💳', label:'Wallet'},
+    {id:'categories', icon:'🏷️', label:'Kategori'},
+    {id:'export',     icon:'📤', label:'Export'},
   ];
   return (
     <div style={{position:'fixed',top:0,left:0,bottom:0,width:220,background:C.surface,borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',zIndex:50,overflowY:'auto'}} className="sidebar">
@@ -668,7 +853,7 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
       <div style={{padding:'0 10px',marginBottom:10}}>
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:'10px 14px'}}>
           <p style={{fontSize:10,color:C.muted,marginBottom:2}}>Total Saldo</p>
-          <p style={{fontFamily:'DM Mono,monospace',fontWeight:500,fontSize:15,color:C.text}}>{fmt(totalBalance)}</p>
+          <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontWeight:500,fontSize:15,color:C.text}}>{fmt(totalBalance)}</p>
           <p style={{fontSize:9,color:C.muted,marginTop:2}}>{wallets.length} wallet aktif</p>
         </div>
       </div>
@@ -682,7 +867,9 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
         )}
         {navItems.map(item=>(
           <button key={item.id} onClick={()=>setView(item.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',width:'100%',border:'none',cursor:'pointer',borderRadius:8,marginBottom:2,background:view===item.id?'rgba(201,145,58,.1)':'transparent',color:view===item.id?C.gold:C.muted,fontWeight:view===item.id?600:400,fontSize:13,textAlign:'left',borderLeft:view===item.id?`2px solid ${C.gold}`:'2px solid transparent',transition:'all .15s'}}>
-            <span style={{fontSize:15}}>{item.icon}</span>{item.label}
+            <span style={{fontSize:15}}>{item.icon}</span>
+            <span style={{flex:1}}>{item.label}</span>
+            {item.id==='recurring'&&recurringDue>0&&<span style={{background:C.expense,color:'#fff',borderRadius:'50%',width:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flexShrink:0}}>{recurringDue}</span>}
           </button>
         ))}
       </nav>
@@ -697,9 +884,14 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
             <p style={{fontSize:9,color:C.gold,textAlign:'center'}}>⚠️ Preview — data tidak tersimpan</p>
           </div>
         )}
-        <button className="scale" onClick={onAdd} style={{...S.btnPrimary,padding:'11px',width:'100%',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
-          <span style={{fontSize:15}}>+</span> Transaksi
-        </button>
+        <div style={{display:'flex',gap:6,marginBottom:6}}>
+          <button className="scale" onClick={onAdd} style={{...S.btnPrimary,padding:'10px',flex:1,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
+            <span style={{fontSize:14}}>+</span> Transaksi
+          </button>
+          <button onClick={onToggleHide} title={hideAmounts?'Tampilkan angka':'Sembunyikan angka'} style={{...S.btnGhost,padding:'10px 12px',fontSize:16,flexShrink:0,borderColor:hideAmounts?C.gold:C.border,color:hideAmounts?C.gold:C.muted}}>
+            {hideAmounts?'🙈':'👁'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -708,11 +900,11 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
 // ═══════════════════ BOTTOM NAV ═══════════════════
 function BottomNav({ view, setView, onAdd }) {
   const items = [
-    {id:'dashboard',emoji:'🏠',label:'Home'},
+    {id:'dashboard',  emoji:'🏠',label:'Home'},
     {id:'transactions',emoji:'📋',label:'Transaksi'},
-    {id:'milestones',emoji:'🎯',label:'Milestone'},
-    {id:'analytics',emoji:'📊',label:'Analitik'},
-    {id:'wallets',emoji:'💳',label:'Wallet'},
+    {id:'budget',     emoji:'🎯',label:'Budget'},
+    {id:'debts',      emoji:'💸',label:'Hutang'},
+    {id:'analytics',  emoji:'📊',label:'Analitik'},
   ];
   return (
     <div className="bottomnav" style={{position:'fixed',bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',zIndex:100,height:64}}>
@@ -733,7 +925,7 @@ function BottomNav({ view, setView, onAdd }) {
 }
 
 // ═══════════════════ DASHBOARD ═══════════════════
-function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onEdit, onDelete }) {
+function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onEdit, onDelete, hide, onWalletDetail, onTransfer }) {
   const thisMonth = currentMonth();
   const monthTxs = transactions.filter(t=>monthStr(t.date)===thisMonth);
   const monthInc = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
@@ -758,15 +950,15 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
       {/* Total balance hero */}
       <div style={{...S.card,padding:20,marginBottom:16,background:`linear-gradient(135deg, ${C.card} 0%, rgba(201,145,58,0.06) 100%)`,borderColor:'rgba(201,145,58,.2)'}}>
         <p style={{fontSize:12,color:C.muted,marginBottom:6,letterSpacing:'1px',textTransform:'uppercase'}}>Total Saldo</p>
-        <p style={{fontFamily:'DM Mono,monospace',fontSize:32,fontWeight:500,color:C.text,marginBottom:14}}>{fmt(totalBalance)}</p>
+        <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:32,fontWeight:500,color:C.text,marginBottom:14}}>{fmt(totalBalance)}</p>
         <div style={{display:'flex',gap:20}}>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             <span style={{fontSize:11}}>▲</span>
-            <div><p style={{fontSize:11,color:C.muted}}>Bulan ini masuk</p><p style={{fontFamily:'DM Mono,monospace',fontSize:14,color:C.income,fontWeight:500}}>{fmt(monthInc)}</p></div>
+            <div><p style={{fontSize:11,color:C.muted}}>Bulan ini masuk</p><p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:14,color:C.income,fontWeight:500}}>{fmt(monthInc)}</p></div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             <span style={{fontSize:11,color:C.expense}}>▼</span>
-            <div><p style={{fontSize:11,color:C.muted}}>Bulan ini keluar</p><p style={{fontFamily:'DM Mono,monospace',fontSize:14,color:C.expense,fontWeight:500}}>{fmt(monthExp)}</p></div>
+            <div><p style={{fontSize:11,color:C.muted}}>Bulan ini keluar</p><p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:14,color:C.expense,fontWeight:500}}>{fmt(monthExp)}</p></div>
           </div>
         </div>
       </div>
@@ -778,7 +970,7 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
             <div style={{position:'absolute',right:-10,top:-10,width:60,height:60,borderRadius:'50%',background:w.color+'11'}}/>
             <div style={{fontSize:20,marginBottom:8}}>{w.emoji}</div>
             <p style={{fontSize:12,color:C.muted,marginBottom:2}}>{w.name}</p>
-            <p style={{fontFamily:'DM Mono,monospace',fontSize:15,fontWeight:500,color:C.text}}>{fmt(w.balance)}</p>
+            <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:15,fontWeight:500,color:C.text}}>{fmt(w.balance)}</p>
             <div style={{width:28,height:3,borderRadius:2,background:w.color,marginTop:8,opacity:.6}}/>
           </div>
         ))}
@@ -806,7 +998,7 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
                   <p style={{fontSize:13,fontWeight:500,color:C.text,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description}</p>
                   <p style={{fontSize:11,color:C.muted}}>{wl?.name||'?'} • {fmtDate(tx.date)}</p>
                 </div>
-                <p style={{fontFamily:'DM Mono,monospace',fontSize:14,fontWeight:500,color:tx.type==='income'?C.income:C.expense,flexShrink:0}}>
+                <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:14,fontWeight:500,color:tx.type==='income'?C.income:C.expense,flexShrink:0}}>
                   {tx.type==='income'?'+':'-'}{fmt(tx.amount)}
                 </p>
               </div>
@@ -903,7 +1095,7 @@ function TransactionList({ transactions, wallets, categories, onEdit, onDelete, 
                   <p style={{fontSize:11,color:C.muted}}>{cat?.name||'?'} • {wl?.name||'?'} • {fmtDate(tx.date)}</p>
                   {tx.note&&<p style={{fontSize:11,color:C.muted,marginTop:2,fontStyle:'italic',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📝 {tx.note}</p>}
                 </div>
-                <p style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:tx.type==='income'?C.income:C.expense,flexShrink:0}}>
+                <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:tx.type==='income'?C.income:C.expense,flexShrink:0}}>
                   {tx.type==='income'?'+':'-'}{fmt(tx.amount)}
                 </p>
                 <div style={{display:'flex',gap:4,flexShrink:0}}>
@@ -990,7 +1182,7 @@ function Analytics({ transactions, wallets, categories }) {
         ].map(([l,v,col])=>(
           <div key={l} style={{...S.card,padding:14}}>
             <p style={{fontSize:12,color:C.muted,marginBottom:4}}>{l}</p>
-            <p style={{fontFamily:'DM Mono,monospace',fontSize:18,fontWeight:500,color:col}}>{v}</p>
+            <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:18,fontWeight:500,color:col}}>{v}</p>
           </div>
         ))}
       </div>
@@ -1068,6 +1260,87 @@ function Analytics({ transactions, wallets, categories }) {
           <p style={{color:C.muted,fontSize:14}}>Belum ada data untuk periode ini</p>
         </div>
       )}
+
+      {/* 50/30/20 Budget Rule */}
+      {filtered.length>0&&(()=>{
+        const inc = filtered.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+        const buckets = {needs:0, wants:0, savings:0, unset:0};
+        filtered.filter(t=>t.type==='expense').forEach(t=>{
+          const cat = categories.find(c=>c.id===t.categoryId);
+          const b = cat?.bucket;
+          if(b==='needs') buckets.needs+=t.amount;
+          else if(b==='wants') buckets.wants+=t.amount;
+          else if(b==='savings'||b==='income') buckets.savings+=t.amount;
+          else buckets.unset+=t.amount;
+        });
+        const ideal = {needs:inc*.5, wants:inc*.3, savings:inc*.2};
+        const bucketCfg = [
+          {key:'needs', label:'Kebutuhan', icon:'🏠', idealPct:50, ideal:ideal.needs, actual:buckets.needs, color:'#38BDF8', desc:'Makan, sewa, transport, tagihan'},
+          {key:'wants', label:'Keinginan', icon:'🎮', idealPct:30, ideal:ideal.wants, actual:buckets.wants, color:'#F472B6', desc:'Hiburan, belanja, hobi'},
+          {key:'savings',label:'Tabungan/Investasi',icon:'💰',idealPct:20,ideal:ideal.savings,actual:buckets.savings,color:'#4ADE80',desc:'Nabung, investasi, dana darurat'},
+        ];
+        const hasBuckets = (buckets.needs+buckets.wants+buckets.savings) > 0;
+        return (
+          <div style={{...S.card,padding:18,marginBottom:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
+              <div>
+                <p style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:2}}>⚖️ Analisis 50/30/20</p>
+                <p style={{fontSize:12,color:C.muted}}>Distribusi ideal: 50% kebutuhan · 30% keinginan · 20% tabungan</p>
+              </div>
+              {inc>0&&<p style={{fontFamily:'DM Mono,monospace',fontSize:12,color:C.muted}}>Income: {fmt(inc)}</p>}
+            </div>
+            {!hasBuckets&&(
+              <div style={{background:'rgba(201,145,58,.08)',border:`1px solid rgba(201,145,58,.2)`,borderRadius:8,padding:12,marginBottom:12}}>
+                <p style={{fontSize:12,color:C.gold}}>💡 Assign kategori pengeluaran ke kelompok 50/30/20 di menu <strong>Kategori</strong> biar analisis ini muncul.</p>
+              </div>
+            )}
+            {buckets.unset>0&&hasBuckets&&(
+              <div style={{background:'rgba(201,145,58,.06)',border:`1px solid rgba(201,145,58,.15)`,borderRadius:6,padding:8,marginBottom:12}}>
+                <p style={{fontSize:11,color:C.gold}}>⚠️ {fmt(buckets.unset)} pengeluaran belum dikelompokkan. Assign kategorinya di menu Kategori.</p>
+              </div>
+            )}
+            <div style={{display:'grid',gap:12}}>
+              {bucketCfg.map(b=>{
+                const actualPct = inc>0?Math.round(b.actual/inc*100):0;
+                const barPct = b.ideal>0?Math.min(100,Math.round(b.actual/b.ideal*100)):0;
+                const over = b.actual > b.ideal && b.ideal>0;
+                const under = b.key==='savings' && b.actual < b.ideal && inc>0;
+                const status = over?'⚠️ Over':under?'📉 Kurang':'✅ Oke';
+                const statusCol = over?C.expense:under?C.gold:C.income;
+                return (
+                  <div key={b.key} style={{background:C.surface,borderRadius:10,padding:12,border:`1px solid ${b.color}22`}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{fontSize:18}}>{b.icon}</span>
+                        <div>
+                          <p style={{fontSize:13,fontWeight:600,color:C.text}}>{b.label}</p>
+                          <p style={{fontSize:10,color:C.muted}}>{b.desc}</p>
+                        </div>
+                      </div>
+                      <div style={{textAlign:'right'}}>
+                        <p style={{fontSize:11,fontWeight:700,color:statusCol}}>{status}</p>
+                        <p style={{fontSize:10,color:C.muted}}>Ideal: {b.idealPct}%</p>
+                      </div>
+                    </div>
+                    <div style={{height:6,background:C.card,borderRadius:3,marginBottom:6,overflow:'hidden'}}>
+                      <div style={{height:'100%',width:`${barPct}%`,background:over?C.expense:b.color,borderRadius:3,transition:'width .4s'}}/>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,color:b.color,fontWeight:600}}>{fmt(b.actual)}</p>
+                      <p style={{fontSize:11,color:C.muted}}>
+                        {actualPct}% dari income {inc>0&&`· ideal ${fmt(b.ideal)}`}
+                      </p>
+                    </div>
+                    {over&&<p style={{fontSize:11,color:C.expense,marginTop:4}}>Lebih {fmt(b.actual-b.ideal)} dari ideal</p>}
+                    {under&&<p style={{fontSize:11,color:C.gold,marginTop:4}}>Kurang {fmt(b.ideal-b.actual)} dari target tabungan</p>}
+                  </div>
+                );
+              })}
+            </div>
+            {inc===0&&<p style={{fontSize:12,color:C.muted,textAlign:'center',marginTop:8}}>Catat pemasukan dulu biar analisis ini bisa dihitung.</p>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1115,6 +1388,16 @@ function WalletManager({ wallets, setWallets, transactions }) {
           </div>
           <div style={{marginBottom:10}}><label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Saldo</label>
             <input className="vi" style={{...S.input}} type="number" placeholder="Saldo (Rp)" value={form.balance} onChange={e=>setForm(p=>({...p,balance:e.target.value}))}/></div>
+          {tab==='expense'&&(
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Kelompok 50/30/20</label>
+              <div style={{display:'flex',gap:6}}>
+                {[['needs','50% Kebutuhan','#38BDF8'],['wants','30% Keinginan','#F472B6'],['savings','20% Tabungan','#4ADE80'],[null,'Belum ditentukan','#3D5580']].map(([val,lbl,col])=>(
+                  <button key={String(val)} onClick={()=>setForm(p=>({...p,bucket:val}))} style={{flex:1,padding:'7px 4px',borderRadius:6,border:`1px solid ${form.bucket===val?col:C.border}`,background:form.bucket===val?col+'20':'transparent',color:form.bucket===val?col:C.muted,fontSize:11,cursor:'pointer',fontWeight:form.bucket===val?600:400,transition:'all .15s',textAlign:'center'}}>{lbl}</button>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{marginBottom:14}}>
             <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:6}}>Warna</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -1177,9 +1460,9 @@ function CategoryManager({ categories, setCategories, transactions }) {
     if(editing) {
       setCategories(prev=>prev.map(c=>c.id===editing?{...c,...form}:c));
     } else {
-      setCategories(prev=>[...prev,{...form,id:uid(),type:tab}]);
+      setCategories(prev=>[...prev,{...form,id:uid(),type:tab,bucket:tab==='income'?'income':form.bucket||null}]);
     }
-    setShowForm(false); setEditing(null); setForm({name:'',type:'expense',emoji:'😊',color:PALETTE[2]});
+    setShowForm(false); setEditing(null); setForm({name:'',type:'expense',emoji:'😊',color:PALETTE[2],bucket:null});
   };
 
   const startEdit = (c) => { setEditing(c.id); setForm({...c}); setShowForm(true); };
@@ -1402,6 +1685,533 @@ function ExportView({ transactions, wallets, categories, onReset, lsOk }) {
   );
 }
 
+// ═══════════════════ BUDGET PER KATEGORI ═══════════════════
+function BudgetView({ categories, setCategories, transactions }) {
+  const [editingId, setEditingId] = useState(null);
+  const [budgetInput, setBudgetInput] = useState('');
+  const [selMonth, setSelMonth] = useState(currentMonth());
+
+  const expCats = categories.filter(c => c.type === 'expense' || c.type === 'both');
+  const monthTxs = transactions.filter(t => t.date?.startsWith(selMonth) && t.type === 'expense');
+  const spending = {};
+  monthTxs.forEach(t => { spending[t.categoryId] = (spending[t.categoryId]||0) + t.amount; });
+
+  const setBudget = (id) => {
+    const val = parseFloat(budgetInput) || 0;
+    setCategories(prev => prev.map(c => c.id===id ? {...c, monthlyBudget: val||null} : c));
+    setEditingId(null); setBudgetInput('');
+  };
+
+  const months = [...new Set(transactions.map(t=>monthStr(t.date)))].sort().reverse();
+  const totalBudget = expCats.filter(c=>c.monthlyBudget).reduce((s,c)=>s+c.monthlyBudget,0);
+  const totalSpent  = expCats.reduce((s,c)=>s+(spending[c.id]||0),0);
+  const overCount   = expCats.filter(c=>c.monthlyBudget&&(spending[c.id]||0)>c.monthlyBudget).length;
+  const budgetSet   = expCats.filter(c=>c.monthlyBudget).length;
+
+  const pctColor = p => p>=100?C.expense:p>=80?C.gold:C.income;
+
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:22,color:C.text,marginBottom:2}}>📊 Budget Kategori</h2>
+          <p style={{fontSize:13,color:C.muted}}>Limit pengeluaran bulanan per kategori</p>
+        </div>
+        <select className="vi" style={{...S.input,width:'auto',padding:'8px 12px',fontSize:13}} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
+          {(months.length?months:[currentMonth()]).map(m=><option key={m} value={m}>{monthLabel(m)} {m.split('-')[0]}</option>)}
+        </select>
+      </div>
+
+      {/* Summary */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10,marginBottom:16}}>
+        {[
+          ['🎯 Budget Diset',budgetSet+' kategori',C.gold],
+          ['💸 Total Dipakai',fmt(totalSpent),C.expense],
+          ['✅ Sisa Budget',fmt(Math.max(0,totalBudget-totalSpent)),C.income],
+          ['⚠️ Over Budget',overCount+' kategori',overCount>0?C.expense:C.muted],
+        ].map(([l,v,col])=>(
+          <div key={l} style={{...S.card,padding:12,textAlign:'center'}}>
+            <p style={{fontSize:10,color:C.muted,marginBottom:3}}>{l}</p>
+            <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:col}}>{v}</p>
+          </div>
+        ))}
+      </div>
+
+      {overCount>0&&(
+        <div style={{background:'rgba(255,61,96,.08)',border:'1px solid rgba(255,61,96,.25)',borderRadius:10,padding:12,marginBottom:14}}>
+          <p style={{fontSize:13,color:C.expense,fontWeight:600}}>⚠️ {overCount} kategori melebihi budget bulan ini!</p>
+        </div>
+      )}
+
+      <div style={{...S.card,overflow:'hidden'}}>
+        <div style={{padding:'12px 16px',borderBottom:`1px solid ${C.border}`}}>
+          <p style={{fontSize:13,fontWeight:600,color:C.text}}>Semua Kategori Pengeluaran</p>
+          <p style={{fontSize:11,color:C.muted,marginTop:2}}>Tap angka budget untuk edit langsung</p>
+        </div>
+        {expCats.length===0&&<div style={{padding:32,textAlign:'center'}}><p style={{color:C.muted}}>Belum ada kategori pengeluaran.</p></div>}
+        {expCats.map(cat=>{
+          const spent   = spending[cat.id]||0;
+          const budget  = cat.monthlyBudget||0;
+          const pct     = budget>0?Math.min(100,Math.round(spent/budget*100)):0;
+          const isOver  = budget>0&&spent>budget;
+          const isWarn  = budget>0&&pct>=80&&!isOver;
+          return (
+            <div key={cat.id} style={{padding:'14px 16px',borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:8}}>
+                <div style={{width:34,height:34,borderRadius:8,background:(cat.color||C.muted)+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{cat.emoji}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                    <p style={{fontSize:13,fontWeight:600,color:C.text}}>{cat.name}</p>
+                    {isOver&&<span style={{fontSize:10,background:'rgba(255,61,96,.15)',color:C.expense,padding:'1px 6px',borderRadius:4,fontWeight:700}}>OVER</span>}
+                    {isWarn&&<span style={{fontSize:10,background:'rgba(245,158,11,.15)',color:C.gold,padding:'1px 6px',borderRadius:4,fontWeight:700}}>HAMPIR</span>}
+                  </div>
+                  <p style={{fontSize:11,color:C.muted}}>Dipakai: <span className="vault-amt" style={{color:isOver?C.expense:C.text,fontWeight:500}}>{fmt(spent)}</span></p>
+                </div>
+                <div style={{textAlign:'right',flexShrink:0}}>
+                  {editingId===cat.id?(
+                    <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                      <input className="vi" style={{...S.input,width:110,padding:'6px 8px',fontSize:12}} type="number" autoFocus placeholder="Budget Rp" value={budgetInput} onChange={e=>setBudgetInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setBudget(cat.id);if(e.key==='Escape'){setEditingId(null);}}}/>
+                      <button onClick={()=>setBudget(cat.id)} style={{...S.btnPrimary,padding:'6px 8px',fontSize:11}}>✓</button>
+                      <button onClick={()=>setEditingId(null)} style={{...S.btnGhost,padding:'6px 8px',fontSize:11}}>✕</button>
+                    </div>
+                  ):(
+                    <button onClick={()=>{setEditingId(cat.id);setBudgetInput(budget||'');}} style={{background:'none',border:`1px dashed ${budget?C.border:C.gold+'66'}`,borderRadius:6,cursor:'pointer',padding:'4px 10px',color:budget?C.text:C.gold,fontSize:12,fontFamily:'DM Mono,monospace'}}>
+                      {budget?fmt(budget):'+ Set Budget'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {budget>0&&(
+                <div>
+                  <div style={{height:5,background:C.surface,borderRadius:3,overflow:'hidden',marginBottom:4}}>
+                    <div style={{height:'100%',width:`${pct}%`,background:pctColor(pct),borderRadius:3,transition:'width .4s'}}/>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between'}}>
+                    <p style={{fontSize:10,color:pctColor(pct),fontWeight:600}}>{pct}% terpakai</p>
+                    <p style={{fontSize:10,color:C.muted}}>Sisa: <span className="vault-amt">{fmt(Math.max(0,budget-spent))}</span></p>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ TRANSAKSI BERULANG ═══════════════════
+const FREQ_OPTS = [
+  {value:'daily',  label:'Setiap Hari'},
+  {value:'weekly', label:'Setiap Minggu'},
+  {value:'monthly',label:'Setiap Bulan'},
+  {value:'yearly', label:'Setiap Tahun'},
+];
+
+const getNextDue = (freq, from) => {
+  const d = new Date(from+'T00:00:00');
+  if(freq==='daily')   d.setDate(d.getDate()+1);
+  if(freq==='weekly')  d.setDate(d.getDate()+7);
+  if(freq==='monthly') d.setMonth(d.getMonth()+1);
+  if(freq==='yearly')  d.setFullYear(d.getFullYear()+1);
+  return d.toISOString().split('T')[0];
+};
+
+function RecurringView({ recurringTxs, setRecurringTxs, wallets, categories, onApplyRecurring }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editId,   setEditId]   = useState(null);
+  const [form, setForm] = useState({name:'',type:'expense',amount:'',walletId:wallets[0]?.id||'',categoryId:'',frequency:'monthly',nextDue:todayStr(),note:'',isActive:true});
+  const sf = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const today = todayStr();
+  const dueNow  = recurringTxs.filter(r=>r.isActive&&r.nextDue<=today);
+  const upcoming= recurringTxs.filter(r=>r.isActive&&r.nextDue>today);
+  const inactive= recurringTxs.filter(r=>!r.isActive);
+
+  const openAdd  = () => { setEditId(null); setForm({name:'',type:'expense',amount:'',walletId:wallets[0]?.id||'',categoryId:'',frequency:'monthly',nextDue:todayStr(),note:'',isActive:true}); setShowForm(true); };
+  const openEdit = r  => { setEditId(r.id); setForm({...r}); setShowForm(true); };
+
+  const save = () => {
+    if(!form.name||!form.amount||!form.walletId||!form.categoryId) return;
+    if(editId) {
+      setRecurringTxs(prev=>prev.map(r=>r.id===editId?{...r,...form,amount:parseFloat(form.amount)||0}:r));
+    } else {
+      setRecurringTxs(prev=>[...prev,{...form,id:uid(),amount:parseFloat(form.amount)||0,createdAt:new Date().toISOString()}]);
+    }
+    setShowForm(false); setEditId(null);
+  };
+
+  const del = id => { if(window.confirm('Hapus transaksi berulang ini?')) setRecurringTxs(prev=>prev.filter(r=>r.id!==id)); };
+
+  const apply = (r) => {
+    onApplyRecurring(r);
+    setRecurringTxs(prev=>prev.map(x=>x.id===r.id?{...x,lastApplied:today,nextDue:getNextDue(x.frequency,today)}:x));
+  };
+
+  const toggle = id => setRecurringTxs(prev=>prev.map(r=>r.id===id?{...r,isActive:!r.isActive}:r));
+
+  const filteredCats = categories.filter(c=>c.type===form.type||c.type==='both');
+
+  const RecurringCard = ({r,showApply}) => {
+    const cat = categories.find(c=>c.id===r.categoryId);
+    const wl  = wallets.find(w=>w.id===r.walletId);
+    const freq= FREQ_OPTS.find(f=>f.value===r.frequency);
+    const daysUntil = Math.ceil((new Date(r.nextDue)-new Date())/(1000*60*60*24));
+    return (
+      <div style={{display:'flex',alignItems:'center',padding:'12px 16px',borderBottom:`1px solid ${C.border}`,gap:10}}>
+        <div style={{width:36,height:36,borderRadius:8,background:(cat?.color||C.muted)+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{cat?.emoji||'🔄'}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+            <p style={{fontSize:13,fontWeight:600,color:r.isActive?C.text:C.muted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.name}</p>
+            {showApply&&<span style={{fontSize:10,background:'rgba(255,61,96,.15)',color:C.expense,padding:'1px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>JATUH TEMPO</span>}
+          </div>
+          <p style={{fontSize:11,color:C.muted}}>{freq?.label} · {wl?.name||'?'} · Due: {fmtDate(r.nextDue)}{showApply&&daysUntil<0?` (${Math.abs(daysUntil)} hari lalu)`:daysUntil===0?' (hari ini!)':''}</p>
+        </div>
+        <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:r.type==='income'?C.income:C.expense,flexShrink:0}}>{r.type==='income'?'+':'-'}{fmt(r.amount)}</p>
+        <div style={{display:'flex',gap:4,flexShrink:0}}>
+          {showApply&&<button onClick={()=>apply(r)} style={{...S.btnPrimary,padding:'6px 10px',fontSize:11}}>✓ Apply</button>}
+          <button onClick={()=>toggle(r.id)} style={{...S.btnGhost,padding:'6px 8px',fontSize:11,color:r.isActive?C.income:C.muted}} title={r.isActive?'Nonaktifkan':'Aktifkan'}>{r.isActive?'●':'○'}</button>
+          <button onClick={()=>openEdit(r)} style={{...S.btnGhost,padding:'6px 8px',fontSize:11}}>✏️</button>
+          <button onClick={()=>del(r.id)} style={{...S.btnDanger,padding:'6px 8px',fontSize:11}}>🗑</button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      {showForm&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(4px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 16px'}} onClick={e=>{if(e.target===e.currentTarget){setShowForm(false);setEditId(null);}}}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:'16px 16px 12px 12px',width:'100%',maxWidth:500,maxHeight:'92vh',overflowY:'auto',padding:20}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:14}}>
+              <h3 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:17,color:C.text}}>{editId?'Edit':'+ Baru'} Transaksi Berulang</h3>
+              <button onClick={()=>{setShowForm(false);setEditId(null);}} style={{...S.btnGhost,padding:'5px 10px'}}>✕</button>
+            </div>
+            <div style={{display:'flex',gap:0,background:C.surface,borderRadius:8,padding:3,border:`1px solid ${C.border}`,marginBottom:12}}>
+              {['expense','income'].map(t=>(
+                <button key={t} onClick={()=>sf('type',t)} style={{flex:1,padding:'8px',borderRadius:6,border:'none',cursor:'pointer',fontWeight:600,fontSize:13,background:form.type===t?(t==='expense'?'rgba(255,61,96,.2)':'rgba(27,194,120,.2)'):'transparent',color:form.type===t?(t==='expense'?C.expense:C.income):C.muted,transition:'all .15s'}}>
+                  {t==='expense'?'📉 Pengeluaran':'📈 Pemasukan'}
+                </button>
+              ))}
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Nama *</label>
+              <input className="vi" style={{...S.input}} placeholder="Gaji Bulanan, Tagihan Listrik, Netflix..." value={form.name} onChange={e=>sf('name',e.target.value)}/>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jumlah (Rp) *</label>
+                <input className="vi" style={{...S.input}} type="number" placeholder="0" value={form.amount} onChange={e=>sf('amount',e.target.value)}/></div>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Frekuensi</label>
+                <select className="vi" style={{...S.input}} value={form.frequency} onChange={e=>sf('frequency',e.target.value)}>
+                  {FREQ_OPTS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
+                </select></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Wallet *</label>
+                <select className="vi" style={{...S.input}} value={form.walletId} onChange={e=>sf('walletId',e.target.value)}>
+                  <option value="">Pilih wallet</option>
+                  {wallets.map(w=><option key={w.id} value={w.id}>{w.emoji} {w.name}</option>)}
+                </select></div>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Kategori *</label>
+                <select className="vi" style={{...S.input}} value={form.categoryId} onChange={e=>sf('categoryId',e.target.value)}>
+                  <option value="">Pilih kategori</option>
+                  {filteredCats.map(c=><option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
+                </select></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jatuh Tempo Pertama</label>
+                <input className="vi" style={{...S.input}} type="date" value={form.nextDue} onChange={e=>sf('nextDue',e.target.value)}/></div>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Catatan</label>
+                <input className="vi" style={{...S.input}} placeholder="Opsional" value={form.note} onChange={e=>sf('note',e.target.value)}/></div>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="scale" style={{...S.btnGhost,padding:'11px 16px'}} onClick={()=>{setShowForm(false);setEditId(null);}}>Batal</button>
+              <button className="scale" style={{...S.btnPrimary,padding:'11px',flex:1,opacity:(!form.name||!form.amount||!form.walletId||!form.categoryId)?.5:1}} onClick={save} disabled={!form.name||!form.amount||!form.walletId||!form.categoryId}>
+                {editId?'💾 Simpan':'+ Tambah'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:22,color:C.text,marginBottom:2}}>🔄 Transaksi Berulang</h2>
+          <p style={{fontSize:13,color:C.muted}}>Otomasi transaksi rutin — gaji, tagihan, langganan</p>
+        </div>
+        <button className="scale" onClick={openAdd} style={{...S.btnPrimary,padding:'10px 16px',fontSize:13}}>+ Tambah</button>
+      </div>
+
+      {dueNow.length>0&&(
+        <div style={{background:'rgba(255,61,96,.08)',border:'1px solid rgba(255,61,96,.25)',borderRadius:12,marginBottom:14,overflow:'hidden'}}>
+          <div style={{padding:'10px 16px',borderBottom:'1px solid rgba(255,61,96,.2)'}}>
+            <p style={{fontSize:13,fontWeight:700,color:C.expense}}>🔔 {dueNow.length} transaksi jatuh tempo — tap Apply untuk catat</p>
+          </div>
+          {dueNow.map(r=><RecurringCard key={r.id} r={r} showApply/>)}
+        </div>
+      )}
+
+      {recurringTxs.length===0?(
+        <div style={{...S.card,padding:52,textAlign:'center'}}>
+          <p style={{fontSize:40,marginBottom:12}}>🔄</p>
+          <p style={{fontWeight:600,fontSize:16,color:C.text,marginBottom:6}}>Belum ada transaksi berulang</p>
+          <p style={{color:C.muted,fontSize:13,marginBottom:18}}>Tambahkan gaji, tagihan rutin, atau langganan supaya ga ketinggalan mencatat.</p>
+          <button className="scale" onClick={openAdd} style={{...S.btnPrimary,padding:'12px 24px',fontSize:14}}>+ Tambah Pertama</button>
+        </div>
+      ):(
+        <>
+          {upcoming.length>0&&(
+            <div style={{...S.card,overflow:'hidden',marginBottom:12}}>
+              <div style={{padding:'10px 16px',borderBottom:`1px solid ${C.border}`}}><p style={{fontSize:13,fontWeight:600,color:C.text}}>📅 Upcoming ({upcoming.length})</p></div>
+              {upcoming.map(r=><RecurringCard key={r.id} r={r} showApply={false}/>)}
+            </div>
+          )}
+          {inactive.length>0&&(
+            <div style={{...S.card,overflow:'hidden',opacity:.7}}>
+              <div style={{padding:'10px 16px',borderBottom:`1px solid ${C.border}`}}><p style={{fontSize:13,fontWeight:600,color:C.muted}}>⏸ Nonaktif ({inactive.length})</p></div>
+              {inactive.map(r=><RecurringCard key={r.id} r={r} showApply={false}/>)}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════ HUTANG / PIUTANG ═══════════════════
+function DebtView({ debts, setDebts }) {
+  const [tab,       setTab]       = useState('owe');   // 'owe' = kamu utang | 'owed' = orang utang ke kamu
+  const [showForm,  setShowForm]  = useState(false);
+  const [editId,    setEditId]    = useState(null);
+  const [detailId,  setDetailId]  = useState(null);
+  const [showPay,   setShowPay]   = useState(false);
+  const [form,  setForm]  = useState({type:'owe',personName:'',amount:'',description:'',dueDate:'',notes:''});
+  const [payForm, setPayForm] = useState({amount:'',date:todayStr(),note:''});
+  const sf = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const oweDebts  = debts.filter(d=>d.type==='owe'&&d.status!=='paid');
+  const owedDebts = debts.filter(d=>d.type==='owed'&&d.status!=='paid');
+  const paidDebts = debts.filter(d=>d.status==='paid');
+
+  const totalOwe  = oweDebts.reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
+  const totalOwed = owedDebts.reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
+
+  const openAdd  = (type) => { setEditId(null); setForm({type,personName:'',amount:'',description:'',dueDate:'',notes:''}); setShowForm(true); };
+  const openEdit = d => { setEditId(d.id); setForm({...d}); setShowForm(true); };
+
+  const save = () => {
+    if(!form.personName||!form.amount) return;
+    if(editId) {
+      setDebts(prev=>prev.map(d=>d.id===editId?{...d,...form,amount:parseFloat(form.amount)||0}:d));
+    } else {
+      setDebts(prev=>[...prev,{...form,id:uid(),amount:parseFloat(form.amount)||0,paidAmount:0,status:'active',payments:[],createdAt:new Date().toISOString()}]);
+    }
+    setShowForm(false); setEditId(null);
+  };
+
+  const del = id => { if(window.confirm('Hapus catatan hutang ini?')) setDebts(prev=>prev.filter(d=>d.id!==id)); };
+
+  const markPaid = id => setDebts(prev=>prev.map(d=>{
+    if(d.id!==id) return d;
+    return {...d,status:'paid',paidAmount:d.amount};
+  }));
+
+  const addPayment = (debtId) => {
+    const amt = parseFloat(payForm.amount)||0;
+    if(!amt) return;
+    setDebts(prev=>prev.map(d=>{
+      if(d.id!==debtId) return d;
+      const newPaid = (d.paidAmount||0)+amt;
+      const newStatus = newPaid>=d.amount?'paid':'partial';
+      return {...d,paidAmount:newPaid,status:newStatus,payments:[...(d.payments||[]),{id:uid(),amount:amt,date:payForm.date,note:payForm.note}]};
+    }));
+    setPayForm({amount:'',date:todayStr(),note:''}); setShowPay(false);
+  };
+
+  const detailDebt = debts.find(d=>d.id===detailId);
+
+  if(detailDebt) {
+    const remaining = detailDebt.amount-(detailDebt.paidAmount||0);
+    const pct = Math.min(100,Math.round((detailDebt.paidAmount||0)/detailDebt.amount*100));
+    return (
+      <div>
+        <div style={{display:'flex',gap:10,alignItems:'center',marginBottom:16}}>
+          <button onClick={()=>setDetailId(null)} style={{...S.btnGhost,padding:'8px 14px',fontSize:13}}>← Kembali</button>
+          <div style={{flex:1}}>
+            <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:20,color:C.text}}>{detailDebt.type==='owe'?'💸':'📥'} {detailDebt.personName}</h2>
+            <p style={{fontSize:12,color:C.muted}}>{detailDebt.type==='owe'?'Kamu utang ke':'Orang ini utang ke kamu'} · {fmtDate(detailDebt.createdAt?.split('T')[0])}</p>
+          </div>
+          <button onClick={()=>openEdit(detailDebt)} style={{...S.btnGhost,padding:'7px 12px',fontSize:12}}>✏️</button>
+          <button onClick={()=>del(detailDebt.id)} style={{...S.btnDanger,padding:'7px 10px',fontSize:12}}>🗑</button>
+        </div>
+        <div style={{...S.card,padding:18,marginBottom:14,borderColor:(detailDebt.type==='owe'?C.expense:C.income)+'44'}}>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}>
+            <div><p style={{fontSize:11,color:C.muted,marginBottom:3}}>Total Hutang</p>
+              <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:26,fontWeight:500,color:detailDebt.type==='owe'?C.expense:C.income}}>{fmt(detailDebt.amount)}</p></div>
+            <div style={{textAlign:'right'}}><p style={{fontSize:11,color:C.muted,marginBottom:3}}>Sisa</p>
+              <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:20,fontWeight:500,color:C.text}}>{fmt(Math.max(0,remaining))}</p></div>
+          </div>
+          <div style={{height:6,background:C.surface,borderRadius:3,marginBottom:6,overflow:'hidden'}}>
+            <div style={{height:'100%',width:`${pct}%`,background:detailDebt.type==='owe'?C.expense:C.income,borderRadius:3}}/>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:detailDebt.description?8:0}}>
+            <p style={{fontSize:11,color:C.muted}}>Terbayar {pct}% ({fmt(detailDebt.paidAmount||0)})</p>
+            {detailDebt.dueDate&&<p style={{fontSize:11,color:new Date(detailDebt.dueDate)<new Date()?C.expense:C.muted}}>Due: {fmtDate(detailDebt.dueDate)}</p>}
+          </div>
+          {detailDebt.description&&<p style={{fontSize:13,color:C.muted,fontStyle:'italic'}}>"{detailDebt.description}"</p>}
+          {detailDebt.status==='paid'&&<div style={{marginTop:10,padding:8,background:'rgba(27,194,120,.12)',borderRadius:8,textAlign:'center'}}><p style={{color:C.income,fontWeight:700,fontSize:13}}>✅ LUNAS!</p></div>}
+        </div>
+        {detailDebt.status!=='paid'&&(
+          !showPay?(
+            <div style={{display:'flex',gap:8,marginBottom:14}}>
+              <button className="scale" onClick={()=>setShowPay(true)} style={{...S.btnPrimary,padding:'11px',flex:1,fontSize:13}}>+ Catat Pembayaran</button>
+              <button className="scale" onClick={()=>markPaid(detailDebt.id)} style={{...S.btnGhost,padding:'11px 16px',fontSize:13}}>✅ Tandai Lunas</button>
+            </div>
+          ):(
+            <div style={{...S.card,padding:16,marginBottom:14,borderColor:C.gold+'44'}}>
+              <p style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:10}}>💳 Catat Pembayaran</p>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jumlah (Rp) *</label>
+                  <input className="vi" style={{...S.input}} type="number" placeholder="0" autoFocus value={payForm.amount} onChange={e=>setPayForm(p=>({...p,amount:e.target.value}))}/></div>
+                <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Tanggal</label>
+                  <input className="vi" style={{...S.input}} type="date" value={payForm.date} onChange={e=>setPayForm(p=>({...p,date:e.target.value}))}/></div>
+              </div>
+              <div style={{marginBottom:10}}><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Catatan</label>
+                <input className="vi" style={{...S.input}} placeholder="Transfer BCA, cash, dll" value={payForm.note} onChange={e=>setPayForm(p=>({...p,note:e.target.value}))}/></div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="scale" style={{...S.btnGhost,padding:'9px 14px'}} onClick={()=>setShowPay(false)}>Batal</button>
+                <button className="scale" style={{...S.btnPrimary,padding:'9px',flex:1}} onClick={()=>addPayment(detailDebt.id)}>Simpan Pembayaran</button>
+              </div>
+            </div>
+          )
+        )}
+        <div style={{...S.card,overflow:'hidden'}}>
+          <div style={{padding:'10px 16px',borderBottom:`1px solid ${C.border}`}}><p style={{fontSize:13,fontWeight:600,color:C.text}}>📜 Riwayat Pembayaran</p></div>
+          {(!detailDebt.payments||detailDebt.payments.length===0)?<div style={{padding:24,textAlign:'center'}}><p style={{color:C.muted,fontSize:13}}>Belum ada pembayaran tercatat.</p></div>:
+          [...(detailDebt.payments||[])].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(p=>(
+            <div key={p.id} style={{display:'flex',alignItems:'center',padding:'10px 16px',borderBottom:`1px solid ${C.border}`,gap:10}}>
+              <div style={{width:30,height:30,borderRadius:6,background:C.income+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>💳</div>
+              <div style={{flex:1}}><p style={{fontSize:13,color:C.text}}>{p.note||'Pembayaran'}</p><p style={{fontSize:11,color:C.muted}}>{fmtDate(p.date)}</p></div>
+              <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:C.income,flexShrink:0}}>+{fmt(p.amount)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const DebtCard = ({d}) => {
+    const remaining = d.amount-(d.paidAmount||0);
+    const overdue   = d.dueDate&&new Date(d.dueDate)<new Date()&&d.status!=='paid';
+    return (
+      <div onClick={()=>setDetailId(d.id)} style={{display:'flex',alignItems:'center',padding:'12px 16px',borderBottom:`1px solid ${C.border}`,gap:10,cursor:'pointer',transition:'background .15s'}}
+        onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+        <div style={{width:36,height:36,borderRadius:'50%',background:(d.type==='owe'?C.expense:C.income)+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0,fontWeight:700,color:d.type==='owe'?C.expense:C.income}}>
+          {d.personName[0]?.toUpperCase()||'?'}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:2}}>
+            <p style={{fontSize:13,fontWeight:600,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.personName}</p>
+            {overdue&&<span style={{fontSize:10,background:'rgba(255,61,96,.15)',color:C.expense,padding:'1px 5px',borderRadius:3,fontWeight:700,flexShrink:0}}>OVERDUE</span>}
+            {d.status==='partial'&&<span style={{fontSize:10,background:'rgba(245,158,11,.15)',color:C.gold,padding:'1px 5px',borderRadius:3,fontWeight:600,flexShrink:0}}>SEBAGIAN</span>}
+          </div>
+          <p style={{fontSize:11,color:C.muted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.description||'—'}{d.dueDate&&` · Due ${fmtDate(d.dueDate)}`}</p>
+        </div>
+        <div style={{textAlign:'right',flexShrink:0}}>
+          <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:d.type==='owe'?C.expense:C.income}}>{fmt(remaining)}</p>
+          {d.status==='partial'&&<p style={{fontSize:10,color:C.muted}}>dari {fmt(d.amount)}</p>}
+        </div>
+        <span style={{color:C.muted,fontSize:12,flexShrink:0}}>›</span>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      {showForm&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(4px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 16px'}} onClick={e=>{if(e.target===e.currentTarget){setShowForm(false);setEditId(null);}}}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:'16px 16px 12px 12px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto',padding:20}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:14}}>
+              <h3 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:17,color:C.text}}>
+                {editId?'Edit':'+'} {form.type==='owe'?'Hutang':'Piutang'}
+              </h3>
+              <button onClick={()=>{setShowForm(false);setEditId(null);}} style={{...S.btnGhost,padding:'5px 10px'}}>✕</button>
+            </div>
+            {!editId&&(
+              <div style={{display:'flex',gap:0,background:C.surface,borderRadius:8,padding:3,border:`1px solid ${C.border}`,marginBottom:12}}>
+                {[['owe','💸 Kamu Utang'],['owed','📥 Orang Utang ke Kamu']].map(([t,l])=>(
+                  <button key={t} onClick={()=>sf('type',t)} style={{flex:1,padding:'8px',borderRadius:6,border:'none',cursor:'pointer',fontWeight:600,fontSize:12,background:form.type===t?(t==='owe'?'rgba(255,61,96,.2)':'rgba(27,194,120,.2)'):'transparent',color:form.type===t?(t==='owe'?C.expense:C.income):C.muted,transition:'all .15s'}}>{l}</button>
+                ))}
+              </div>
+            )}
+            <div style={{marginBottom:10}}><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Nama Orang *</label>
+              <input className="vi" style={{...S.input}} placeholder="Siapa?" value={form.personName} onChange={e=>sf('personName',e.target.value)}/></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jumlah (Rp) *</label>
+                <input className="vi" style={{...S.input}} type="number" placeholder="0" value={form.amount} onChange={e=>sf('amount',e.target.value)}/></div>
+              <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jatuh Tempo</label>
+                <input className="vi" style={{...S.input}} type="date" value={form.dueDate} onChange={e=>sf('dueDate',e.target.value)}/></div>
+            </div>
+            <div style={{marginBottom:10}}><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Keterangan</label>
+              <input className="vi" style={{...S.input}} placeholder="Untuk apa?" value={form.description} onChange={e=>sf('description',e.target.value)}/></div>
+            <div style={{marginBottom:16}}><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Catatan</label>
+              <textarea className="vi" style={{...S.input,height:52,resize:'none'}} placeholder="Catatan tambahan..." value={form.notes} onChange={e=>sf('notes',e.target.value)}/></div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="scale" style={{...S.btnGhost,padding:'11px 16px'}} onClick={()=>{setShowForm(false);setEditId(null);}}>Batal</button>
+              <button className="scale" style={{...S.btnPrimary,padding:'11px',flex:1,opacity:(!form.personName||!form.amount)?.5:1}} onClick={save} disabled={!form.personName||!form.amount}>
+                {editId?'💾 Simpan':'+ Tambah'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:22,color:C.text,marginBottom:2}}>💸 Hutang & Piutang</h2>
+          <p style={{fontSize:13,color:C.muted}}>Catat siapa yang utang ke kamu dan kamu utang ke siapa</p>
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          <button className="scale" onClick={()=>openAdd('owed')} style={{...S.btnGhost,padding:'9px 12px',fontSize:12,color:C.income,borderColor:C.income+'44'}}>+ Piutang</button>
+          <button className="scale" onClick={()=>openAdd('owe')} style={{...S.btnPrimary,padding:'9px 12px',fontSize:12,background:`linear-gradient(135deg,${C.expense},#ff6b8a)`}}>+ Hutang</button>
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:16}}>
+        {[
+          ['💸 Total Kamu Utang',fmt(totalOwe),C.expense],
+          ['📥 Total Piutang',fmt(totalOwed),C.income],
+          ['📊 Net',(totalOwed-totalOwe>=0?'+':'')+fmt(totalOwed-totalOwe),totalOwed-totalOwe>=0?C.income:C.expense],
+        ].map(([l,v,col])=>(
+          <div key={l} style={{...S.card,padding:12,textAlign:'center'}}>
+            <p style={{fontSize:10,color:C.muted,marginBottom:3}}>{l}</p>
+            <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:col}}>{v}</p>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:'flex',gap:0,background:C.surface,borderRadius:8,padding:3,border:`1px solid ${C.border}`,marginBottom:14}}>
+        {[['owe','💸 Kamu Utang ('+oweDebts.length+')'],['owed','📥 Piutang ('+owedDebts.length+')'],['paid','✅ Lunas ('+paidDebts.length+')']].map(([t,l])=>(
+          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'8px',borderRadius:6,border:'none',cursor:'pointer',fontWeight:600,fontSize:12,background:tab===t?C.card:'transparent',color:tab===t?C.text:C.muted,transition:'all .15s'}}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{...S.card,overflow:'hidden'}}>
+        {(()=>{
+          const list = tab==='owe'?oweDebts:tab==='owed'?owedDebts:paidDebts;
+          if(list.length===0) return (
+            <div style={{padding:40,textAlign:'center'}}>
+              <p style={{fontSize:32,marginBottom:8}}>{tab==='paid'?'✅':'🤝'}</p>
+              <p style={{color:C.muted,fontSize:13}}>{tab==='paid'?'Belum ada yang lunas.':tab==='owe'?'Tidak ada hutang — mantap!':'Belum ada piutang.'}</p>
+            </div>
+          );
+          return list.map(d=><DebtCard key={d.id} d={d}/>);
+        })()}
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════ MILESTONES ═══════════════════
 const MILESTONE_EMOJIS = ['🎯','💻','🏠','🚗','✈️','💍','👶','📱','🎓','💰','🎮','📷','🎸','⌚','🎨','🏖️','🐕','🏋️','🛒','🔑','💎','🌟','🎪','🏄'];
 
@@ -1500,11 +2310,11 @@ function MilestoneView({ milestones, setMilestones, wallets }) {
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
             <div>
               <p style={{fontSize:12,color:C.muted,marginBottom:4}}>Terkumpul</p>
-              <p style={{fontFamily:'DM Mono,monospace',fontSize:28,fontWeight:500,color:m.color}}>{fmt(m.currentAmount)}</p>
+              <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:28,fontWeight:500,color:m.color}}>{fmt(m.currentAmount)}</p>
             </div>
             <div style={{textAlign:'right'}}>
               <p style={{fontSize:12,color:C.muted,marginBottom:4}}>Target</p>
-              <p style={{fontFamily:'DM Mono,monospace',fontSize:20,fontWeight:500,color:C.text}}>{fmt(m.targetAmount)}</p>
+              <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:20,fontWeight:500,color:C.text}}>{fmt(m.targetAmount)}</p>
             </div>
           </div>
           {/* Progress bar */}
@@ -1956,9 +2766,12 @@ export default function App() {
   const [wallets, setWallets]       = useState(()=> !FB_ON && lsOk ? LS.get('vault_wallets',[]) : []);
   const [categories, setCategories] = useState(()=> !FB_ON && lsOk ? LS.get('vault_categories',[]) : []);
   const [transactions, setTransactions] = useState(()=> !FB_ON && lsOk ? LS.get('vault_transactions',[]) : []);
-  const [milestones, setMilestones] = useState(()=> !FB_ON && lsOk ? LS.get('vault_milestones',[]) : []);
+  const [milestones,     setMilestones]     = useState(()=> !FB_ON && lsOk ? LS.get('vault_milestones',[]) : []);
+  const [recurringTxs,  setRecurringTxs]  = useState(()=> !FB_ON && lsOk ? LS.get('vault_recurring',[]) : []);
+  const [debts,         setDebts]         = useState(()=> !FB_ON && lsOk ? LS.get('vault_debts',[]) : []);
 
   const [view, setView]         = useState('dashboard');
+  const [hideAmounts, setHideAmounts] = useState(false);
   const [txModal, setTxModal]   = useState(false);
   const [editTx, setEditTx]     = useState(null);
   const [saveIndicator, setSaveIndicator] = useState('');
@@ -1981,11 +2794,13 @@ export default function App() {
           setCategories(data.categories||[]);
           setTransactions(data.transactions||[]);
           setMilestones(data.milestones||[]);
+          setRecurringTxs(data.recurringTxs||[]);
+          setDebts(data.debts||[]);
           setReady(!!data.setupDone);
         }
         setDataLoading(false);
       } else {
-        setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setReady(false);
+        setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setRecurringTxs([]); setDebts([]); setReady(false);
       }
     });
     return ()=>unsub();
@@ -2029,12 +2844,28 @@ export default function App() {
   useEffect(()=>{
     if(!ready) return;
     if(useFirebase && fbUser) {
-      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, setupDone:true,
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, recurringTxs, debts, setupDone:true,
         userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
     } else if(!FB_ON && lsOk) {
       LS.set('vault_milestones', milestones);
     }
   },[milestones]);
+
+  useEffect(()=>{
+    if(!ready) return;
+    if(useFirebase && fbUser) {
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, recurringTxs, debts, setupDone:true,
+        userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
+    } else if(!FB_ON && lsOk) { LS.set('vault_recurring', recurringTxs); }
+  },[recurringTxs]);
+
+  useEffect(()=>{
+    if(!ready) return;
+    if(useFirebase && fbUser) {
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, recurringTxs, debts, setupDone:true,
+        userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
+    } else if(!FB_ON && lsOk) { LS.set('vault_debts', debts); }
+  },[debts]);
 
   const handleSetupComplete = ({wallets:w, categories:c}) => {
     setWallets(w); setCategories(c);
@@ -2056,10 +2887,29 @@ export default function App() {
     setWallets([]); setCategories([]); setTransactions([]); setReady(false);
   };
 
+  // ── Transfer between wallets ──
+  const handleTransfer = useCallback(({fromId, toId, amount, date, note}) => {
+    const transferCatId = categories.find(c=>c.name==='Transfer'||c.name==='Transfer Masuk')?.id || categories.find(c=>c.type==='income')?.id || '';
+    // Deduct from source
+    setWallets(prev=>prev.map(w=>w.id===fromId?{...w,balance:w.balance-amount}:w.id===toId?{...w,balance:w.balance+amount}:w));
+    // Log as two transactions
+    const now = new Date().toISOString();
+    const expTx = {id:uid(),type:'expense',amount,walletId:fromId,categoryId:transferCatId,description:`Transfer ke ${wallets.find(w=>w.id===toId)?.name||'wallet'}`,date,note:note||'',createdAt:now};
+    const incTx = {id:uid(),type:'income',amount,walletId:toId,categoryId:transferCatId,description:`Transfer dari ${wallets.find(w=>w.id===fromId)?.name||'wallet'}`,date,note:note||'',createdAt:now};
+    setTransactions(prev=>[incTx,expTx,...prev]);
+  },[wallets,categories]);
+
+  // ── Wallet detail & transfer modal state ──
+  const [walletDetailId, setWalletDetailId] = useState(null);
+  const [transferFromWallet, setTransferFromWallet] = useState(null);
+
+  const openWalletDetail = (walletId) => setWalletDetailId(walletId);
+  const openTransferModal = (wallet) => { setTransferFromWallet(wallet||null); };
+
   const handleLogout = async () => {
     if(fbAuth) try{ await fbSignOut(fbAuth); }catch{}
     setFbUser(null); setLocalMode(false);
-    setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setReady(false);
+    setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setRecurringTxs([]); setDebts([]); setReady(false);
     setView('dashboard');
   };
 
@@ -2091,6 +2941,11 @@ export default function App() {
       return prev.filter(t=>t.id!==id);
     });
   },[]);
+
+  const handleApplyRecurring = useCallback((r)=>{
+    addTx({type:r.type,amount:r.amount,walletId:r.walletId,categoryId:r.categoryId,
+           description:r.name,date:todayStr(),note:r.note||''});
+  },[addTx]);
 
   const totalBalance = useMemo(()=>wallets.reduce((s,w)=>s+w.balance,0),[wallets]);
   const openAdd  = ()=>{ setEditTx(null); setTxModal(true); };
@@ -2133,10 +2988,10 @@ export default function App() {
     </div>
   );
 
-  const viewProps = {wallets,categories,transactions,milestones,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance};
+  const viewProps = {wallets,categories,transactions,milestones,recurringTxs,debts,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance,hide:hideAmounts,onWalletDetail:openWalletDetail,onTransfer:openTransferModal};
 
   return (
-    <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'system-ui,-apple-system,sans-serif'}}>
+    <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'system-ui,-apple-system,sans-serif'}} className={hideAmounts?'vault-private':''}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;margin:0;padding:0} input,select,textarea,button{font-family:inherit}
@@ -2147,11 +3002,15 @@ export default function App() {
         .bottomnav{display:none}
         @media(max-width:767px){.sidebar{display:none!important}.bottomnav{display:flex!important}.main-wrap{margin-left:0!important;padding:16px 16px 72px!important}}
         @keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .vault-private .vault-amt{filter:blur(7px);transition:filter .2s;user-select:none}
+        .vault-private .vault-amt:hover{filter:blur(0)}
       `}</style>
 
       <Sidebar view={view} setView={setView} onAdd={openAdd} totalBalance={totalBalance}
         wallets={wallets} saveIndicator={saveIndicator} lsOk={lsOk||useFirebase}
-        fbUser={fbUser} isAdmin={isAdmin} localMode={localMode} onLogout={handleLogout}/>
+        fbUser={fbUser} isAdmin={isAdmin} localMode={localMode} onLogout={handleLogout}
+        onToggleHide={()=>setHideAmounts(h=>!h)} hideAmounts={hideAmounts}
+        recurringDue={recurringTxs.filter(r=>r.isActive&&r.nextDue<=todayStr()).length}/>
 
       <div className="main-wrap" style={{marginLeft:220,padding:'24px 28px',maxWidth:1100,minHeight:'100vh'}}>
         {view==='admin'  && <AdminPanel currentUser={fbUser} onBack={()=>setView('dashboard')}/>}
@@ -2159,6 +3018,9 @@ export default function App() {
         {view==='transactions' && <TransactionList {...viewProps}/>}
         {view==='analytics'   && <Analytics {...viewProps}/>}
         {view==='milestones'  && <MilestoneView milestones={milestones} setMilestones={setMilestones} wallets={wallets}/>}
+        {view==='budget'      && <BudgetView categories={categories} setCategories={setCategories} transactions={transactions}/>}
+        {view==='recurring'   && <RecurringView recurringTxs={recurringTxs} setRecurringTxs={setRecurringTxs} wallets={wallets} categories={categories} onApplyRecurring={handleApplyRecurring}/>}
+        {view==='debts'       && <DebtView debts={debts} setDebts={setDebts}/>}
         {view==='wallets'     && <WalletManager wallets={wallets} setWallets={setWallets} transactions={transactions}/>}
         {view==='categories'  && <CategoryManager categories={categories} setCategories={setCategories} transactions={transactions}/>}
         {view==='export'      && <ExportView transactions={transactions} wallets={wallets} categories={categories} onReset={handleResetAll} lsOk={lsOk||useFirebase}/>}
@@ -2170,6 +3032,22 @@ export default function App() {
         <TxModal wallets={wallets} categories={categories} editTx={editTx}
           onClose={()=>{setTxModal(false);setEditTx(null);}} onSave={onSave}/>
       )}
+      {transferFromWallet&&(
+        <TransferModal wallets={wallets} onClose={()=>setTransferFromWallet(null)} onTransfer={handleTransfer}/>
+      )}
+      {walletDetailId&&(()=>{
+        const wd = wallets.find(w=>w.id===walletDetailId);
+        if(!wd) return null;
+        return (
+          <WalletDetail
+            wallet={wd} wallets={wallets} transactions={transactions} categories={categories}
+            onClose={()=>setWalletDetailId(null)}
+            onTransfer={(w)=>{ setWalletDetailId(null); setTransferFromWallet(w||wd); }}
+            onEdit={(w)=>{ setWalletDetailId(null); setView('wallets'); }}
+            onAddTx={(wId)=>{ setWalletDetailId(null); setEditTx(null); setTxModal(true); }}
+          />
+        );
+      })()}
     </div>
   );
 }
