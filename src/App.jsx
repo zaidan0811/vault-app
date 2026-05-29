@@ -252,7 +252,7 @@ function Onboarding({ onComplete }) {
               <p style={{color:C.muted,fontSize:15,marginBottom:8}}>Personal Money Manager</p>
               <p style={{color:C.gold,fontSize:13,marginBottom:28,fontStyle:'italic'}}>Financial clarity, redefined.</p>
               <div style={{...S.card,padding:16,marginBottom:24,textAlign:'left'}}>
-                {[['🏦','Multi-Wallet Tracking','Kelola BRI, BCA, GoPay, dll.'],['🎤','Voice Input + AI','Ngomong aja, otomatis diparse'],['📊','Analytics Lengkap','Grafik, breakdown kategori, trend'],['📤','Export Data','CSV, JSON, Print PDF']].map(([e,t,d])=>(
+                {[['🏦','Multi-Wallet Tracking','Kelola BRI, BCA, GoPay, dll.'],['📷','Scan Struk + AI Parse','Foto struk/transfer, otomatis diparse'],['📊','Analytics Lengkap','Grafik, breakdown kategori, trend'],['📤','Export & Sync','CSV, Google Sheets, Print PDF']].map(([e,t,d])=>(
                   <div key={t} style={{display:'flex',gap:12,alignItems:'flex-start',marginBottom:12}}>
                     <span style={{fontSize:20}}>{e}</span>
                     <div><p style={{fontWeight:600,fontSize:13,color:C.text,marginBottom:2}}>{t}</p><p style={{fontSize:12,color:C.muted}}>{d}</p></div>
@@ -670,116 +670,116 @@ function WalletDetail({ wallet, wallets, transactions, categories, onClose, onTr
   const [search, setSearch] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
 
-  const walletTxs = transactions.filter(t => t.walletId === wallet.id);
-  const filtered = walletTxs.filter(t =>
+  const walletTxs = transactions.filter(t=>t.walletId===wallet.id);
+  const filtered  = walletTxs.filter(t=>
     (!search || t.description?.toLowerCase().includes(search.toLowerCase())) &&
     (!filterMonth || t.date?.startsWith(filterMonth))
   );
+  const getCat  = id => categories.find(c=>c.id===id);
+  const months  = [...new Set(walletTxs.map(t=>monthStr(t.date)))].sort().reverse();
+  const thisM   = currentMonth();
+  const monthInc= walletTxs.filter(t=>t.type==='income'&&t.date?.startsWith(thisM)).reduce((s,t)=>s+t.amount,0);
+  const monthExp= walletTxs.filter(t=>t.type==='expense'&&t.date?.startsWith(thisM)).reduce((s,t)=>s+t.amount,0);
 
-  const getCat = id => categories.find(c=>c.id===id);
-  const months = [...new Set(walletTxs.map(t=>monthStr(t.date)))].sort().reverse();
-  const thisM  = currentMonth();
-
-  const monthInc = walletTxs.filter(t=>t.type==='income'&&t.date?.startsWith(thisM)).reduce((s,t)=>s+t.amount,0);
-  const monthExp = walletTxs.filter(t=>t.type==='expense'&&t.date?.startsWith(thisM)).reduce((s,t)=>s+t.amount,0);
-
-  // Group filtered txs by month
+  // Group by month
   const grouped = {};
-  filtered.forEach(t => {
-    const m = monthStr(t.date);
-    if(!grouped[m]) grouped[m]=[];
-    grouped[m].push(t);
-  });
+  filtered.forEach(t=>{const m=monthStr(t.date);if(!grouped[m])grouped[m]=[];grouped[m].push(t);});
   const sortedMonths = Object.keys(grouped).sort().reverse();
+
+  const walletTypeLabel = WALLET_TYPES.find(t=>t.value===wallet.type)?.label||wallet.type;
 
   return (
     <div style={{position:'fixed',inset:0,background:C.bg,zIndex:150,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-      <style>{`.wd-tx:hover{background:${C.surface}!important}`}</style>
-
-      {/* Header */}
-      <div style={{padding:'16px 20px',display:'flex',alignItems:'center',gap:12,background:C.surface,borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-        <button onClick={onClose} style={{...S.btnGhost,padding:'8px 12px',fontSize:16,flexShrink:0}}>←</button>
-        <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:16,color:C.text,flex:1}}>Rincian Wallet</h2>
+      {/* Top bar */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px 12px',background:C.surface,borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+        <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:C.text,fontSize:22,padding:'2px 8px 2px 0',display:'flex',alignItems:'center'}}>‹</button>
+        <p style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:16,color:C.text}}>Rincian Kantong</p>
+        <button onClick={()=>onEdit(wallet)} style={{background:'none',border:'none',cursor:'pointer',color:C.muted,fontSize:18,padding:'2px 0 2px 8px'}}>⋯</button>
       </div>
 
       <div style={{flex:1,overflowY:'auto'}}>
-        {/* Hero section */}
-        <div style={{padding:'28px 20px 20px',textAlign:'center',background:`linear-gradient(180deg, ${C.surface} 0%, ${C.bg} 100%)`}}>
-          <div style={{width:64,height:64,borderRadius:16,background:wallet.color+'20',border:`1px solid ${wallet.color}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,margin:'0 auto 12px'}}>{wallet.emoji}</div>
-          <p style={{fontSize:13,color:C.muted,marginBottom:4}}>{WALLET_TYPES.find(t=>t.value===wallet.type)?.label||wallet.type}</p>
-          <p style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:18,color:C.text,marginBottom:4}}>{wallet.name}</p>
-          <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:34,fontWeight:500,color:C.text,marginBottom:16}}>{fmt(wallet.balance)}</p>
+        {/* Hero */}
+        <div style={{textAlign:'center',padding:'32px 20px 24px',background:`linear-gradient(180deg,${C.surface} 0%,${C.bg} 80%)`}}>
+          <div style={{width:72,height:72,borderRadius:20,background:wallet.color+'20',border:`2px solid ${wallet.color}33`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:38,margin:'0 auto 14px'}}>{wallet.emoji}</div>
+          <p style={{fontSize:12,color:C.muted,marginBottom:6,letterSpacing:'0.5px'}}>{walletTypeLabel}</p>
+          <p style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:20,color:C.text,marginBottom:6}}>{wallet.name}</p>
+          <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:36,fontWeight:500,color:C.text,marginBottom:2}}>{fmt(wallet.balance)}</p>
+        </div>
 
-          {/* Action buttons */}
-          <div style={{display:'flex',justifyContent:'center',gap:12}}>
-            {[
-              {icon:'➕',label:'Tambah Tx',action:()=>{onAddTx(wallet.id);}},
-              {icon:'↕️',label:'Transfer',action:()=>onTransfer(wallet)},
-              {icon:'✏️',label:'Edit Wallet',action:()=>onEdit(wallet)},
-            ].map(({icon,label,action})=>(
-              <button key={label} onClick={action} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:'10px 14px',cursor:'pointer',color:C.text,minWidth:76,transition:'all .15s'}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor=C.gold;e.currentTarget.style.color=C.gold;}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text;}}>
-                <span style={{fontSize:20}}>{icon}</span>
-                <span style={{fontSize:11}}>{label}</span>
+        {/* Action buttons row — Bank Jago style */}
+        <div style={{display:'flex',justifyContent:'center',gap:28,padding:'0 20px 24px'}}>
+          {[
+            {icon:'＋',label:'Tambah Tx',bg:C.gold,action:()=>onAddTx(wallet.id)},
+            {icon:'↑',label:'Pindahkan',bg:C.blue,action:()=>onTransfer(wallet)},
+            {icon:'→',label:'Edit Wallet',bg:'#8B5CF6',action:()=>onEdit(wallet)},
+          ].map(({icon,label,bg,action})=>(
+            <div key={label} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8}}>
+              <button onClick={action} style={{width:54,height:54,borderRadius:'50%',background:bg,border:'none',cursor:'pointer',fontSize:22,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:`0 4px 14px ${bg}44`,transition:'transform .15s'}}
+                onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
+                {icon}
               </button>
-            ))}
+              <span style={{fontSize:11,color:C.muted,fontWeight:500}}>{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Month stats */}
+        <div style={{padding:'0 14px 14px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          <div style={{...S.card,padding:'10px 12px'}}>
+            <p style={{fontSize:10,color:C.muted,marginBottom:3}}>📈 Masuk bulan ini</p>
+            <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:14,fontWeight:600,color:C.income}}>{fmt(monthInc)}</p>
+          </div>
+          <div style={{...S.card,padding:'10px 12px'}}>
+            <p style={{fontSize:10,color:C.muted,marginBottom:3}}>📉 Keluar bulan ini</p>
+            <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:14,fontWeight:600,color:C.expense}}>{fmt(monthExp)}</p>
           </div>
         </div>
 
-        {/* This month stats */}
-        <div style={{padding:'0 16px 16px'}}>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
-            {[
-              [walletTxs.length+' tx','Total Transaksi',C.text],
-              [fmt(monthInc),'Masuk bulan ini',C.income],
-              [fmt(monthExp),'Keluar bulan ini',C.expense],
-            ].map(([v,l,col])=>(
-              <div key={l} style={{...S.card,padding:10,textAlign:'center'}}>
-                <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:col,marginBottom:2}}>{v}</p>
-                <p style={{fontSize:10,color:C.muted,lineHeight:1.2}}>{l}</p>
-              </div>
-            ))}
+        {/* Search + filter */}
+        <div style={{padding:'0 14px 12px',display:'flex',gap:8}}>
+          <div style={{flex:1,position:'relative'}}>
+            <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:C.muted,fontSize:14}}>🔍</span>
+            <input className="vi" style={{...S.input,paddingLeft:32}} placeholder="Cari Transaksi" value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
+          <select className="vi" style={{...S.input,width:'auto',padding:'8px 10px',fontSize:12}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
+            <option value="">Semua</option>
+            {months.map(m=><option key={m} value={m}>{monthLabel(m)} {m.split('-')[0]}</option>)}
+          </select>
+        </div>
 
-          {/* Search + filter */}
-          <div style={{display:'flex',gap:8,marginBottom:12}}>
-            <input className="vi" style={{...S.input,flex:1}} placeholder="🔍 Cari transaksi..." value={search} onChange={e=>setSearch(e.target.value)}/>
-            <select className="vi" style={{...S.input,width:'auto',padding:'8px 10px',fontSize:12}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
-              <option value="">Semua</option>
-              {months.map(m=><option key={m} value={m}>{monthLabel(m)} {m.split('-')[0]}</option>)}
-            </select>
-          </div>
-
-          {/* Transaction list grouped by month */}
+        {/* Transaction list */}
+        <div style={{padding:'0 14px 32px'}}>
           {walletTxs.length===0?(
             <div style={{...S.card,padding:40,textAlign:'center'}}>
               <p style={{fontSize:28,marginBottom:8}}>📭</p>
-              <p style={{color:C.muted,fontSize:13}}>Belum ada transaksi di wallet ini.</p>
-              <button className="scale" onClick={()=>onAddTx(wallet.id)} style={{...S.btnPrimary,padding:'10px 20px',fontSize:13,marginTop:12}}>+ Tambah Transaksi</button>
+              <p style={{color:C.muted,fontSize:13,marginBottom:12}}>Belum ada transaksi di wallet ini.</p>
+              <button className="scale" onClick={()=>onAddTx(wallet.id)} style={{...S.btnPrimary,padding:'10px 20px',fontSize:13}}>+ Tambah Transaksi</button>
             </div>
           ):(
             sortedMonths.map(m=>(
-              <div key={m} style={{marginBottom:12}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 4px',marginBottom:4}}>
-                  <p style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.5px'}}>{monthLabel(m)} {m.split('-')[0]}</p>
-                  <p className="vault-amt" style={{fontSize:11,color:C.muted}}>
-                    {fmt(grouped[m].filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0))} masuk · {fmt(grouped[m].filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0))} keluar
-                  </p>
+              <div key={m} style={{marginBottom:16}}>
+                {/* Month header */}
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,padding:'0 2px'}}>
+                  <p style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:'1px',textTransform:'uppercase'}}>{monthLabel(m)} {m.split('-')[0]}</p>
+                  <p style={{fontSize:10,color:C.muted}}>Diperbarui Hari ini</p>
                 </div>
                 <div style={{...S.card,overflow:'hidden'}}>
                   {grouped[m].map((tx,i)=>{
                     const cat=getCat(tx.categoryId);
                     return (
-                      <div key={tx.id} className="wd-tx" style={{display:'flex',alignItems:'center',padding:'11px 14px',borderBottom:i<grouped[m].length-1?`1px solid ${C.border}`:'none',gap:10,transition:'background .1s'}}>
-                        <div style={{width:34,height:34,borderRadius:8,background:(cat?.color||C.muted)+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{cat?.emoji||'💸'}</div>
+                      <div key={tx.id} style={{display:'flex',alignItems:'center',padding:'12px 14px',borderBottom:i<grouped[m].length-1?`1px solid ${C.border}`:'none',gap:12}}>
+                        {/* Avatar circle */}
+                        <div style={{width:40,height:40,borderRadius:'50%',background:(cat?.color||C.muted)+'20',border:`1px solid ${(cat?.color||C.muted)}33`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{cat?.emoji||'💸'}</div>
                         <div style={{flex:1,minWidth:0}}>
-                          <p style={{fontSize:13,color:C.text,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description}</p>
-                          <p style={{fontSize:11,color:C.muted}}>{cat?.name||'?'} · {fmtDate(tx.date)}</p>
+                          <p style={{fontSize:13,fontWeight:600,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.description}</p>
+                          <p style={{fontSize:11,color:C.muted}}>{fmtDate(tx.date)}</p>
                         </div>
-                        <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:tx.type==='income'?C.income:C.expense,flexShrink:0}}>
-                          {tx.type==='income'?'+':'-'}{fmt(tx.amount)}
-                        </p>
+                        <div style={{textAlign:'right',flexShrink:0}}>
+                          <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:13,fontWeight:600,color:tx.type==='income'?C.income:C.expense}}>
+                            {tx.type==='income'?'+':'-'}{fmt(tx.amount)}
+                          </p>
+                          <p style={{fontSize:10,color:C.muted}}>{cat?.name||'?'}</p>
+                        </div>
                       </div>
                     );
                   })}
@@ -794,19 +794,20 @@ function WalletDetail({ wallet, wallets, transactions, categories, onClose, onTr
 }
 
 // ═══════════════════ SIDEBAR ═══════════════════
-function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, lsOk, fbUser, isAdmin, localMode, onLogout, onToggleHide, hideAmounts, recurringDue }) {
+function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, lsOk, fbUser, isAdmin, localMode, onLogout, onToggleHide, hideAmounts, recurringDue, ProfileMenu }) {
   const today = new Date().toISOString().split('T')[0];
   const navItems = [
-    {id:'dashboard',  icon:'🏠', label:'Dashboard'},
-    {id:'transactions',icon:'📋',label:'Transaksi'},
-    {id:'analytics',  icon:'📊', label:'Analitik'},
-    {id:'budget',     icon:'🎯', label:'Budget'},
-    {id:'milestones', icon:'⭐', label:'Milestone'},
-    {id:'recurring',  icon:'🔄', label:'Berulang'},
-    {id:'debts',      icon:'💸', label:'Hutang/Piutang'},
-    {id:'wallets',    icon:'💳', label:'Wallet'},
-    {id:'categories', icon:'🏷️', label:'Kategori'},
-    {id:'export',     icon:'📤', label:'Export'},
+    {id:'dashboard',   icon:'🏠', label:'Beranda'},
+    {id:'wallets-page',icon:'💳', label:'Kantong'},
+    {id:'transactions',icon:'📋', label:'Transaksi'},
+    {id:'analytics',   icon:'📊', label:'Analitik'},
+    {id:'budget',      icon:'🎯', label:'Budget'},
+    {id:'milestones',  icon:'⭐', label:'Milestone'},
+    {id:'recurring',   icon:'🔄', label:'Berulang'},
+    {id:'debts',       icon:'💸', label:'Hutang/Piutang'},
+    {id:'wallets',     icon:'⚙️', label:'Kelola Wallet'},
+    {id:'categories',  icon:'🏷️', label:'Kategori'},
+    {id:'export',      icon:'📤', label:'Export & Sync'},
   ];
   return (
     <div style={{position:'fixed',top:0,left:0,bottom:0,width:220,background:C.surface,borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',zIndex:50,overflowY:'auto'}} className="sidebar">
@@ -875,51 +876,222 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
       </nav>
 
       <div style={{padding:'10px 10px 14px'}}>
-        {lsOk ? (
-          <div style={{textAlign:'center',marginBottom:6,height:14}}>
-            {saveIndicator==='saved'&&<p style={{fontSize:9,color:C.income}}>✓ Tersimpan otomatis</p>}
-          </div>
-        ) : (
-          <div style={{background:'rgba(201,145,58,.08)',borderRadius:5,padding:'5px 8px',marginBottom:6}}>
-            <p style={{fontSize:9,color:C.gold,textAlign:'center'}}>⚠️ Preview — data tidak tersimpan</p>
-          </div>
+        {lsOk&&saveIndicator==='saved'&&(
+          <p style={{fontSize:9,color:C.income,textAlign:'center',marginBottom:5}}>✓ Tersimpan otomatis</p>
         )}
-        <div style={{display:'flex',gap:6,marginBottom:6}}>
+        {!lsOk&&<p style={{fontSize:9,color:C.gold,textAlign:'center',marginBottom:5}}>⚠️ Preview mode</p>}
+        <div style={{display:'flex',gap:6,marginBottom:8}}>
           <button className="scale" onClick={onAdd} style={{...S.btnPrimary,padding:'10px',flex:1,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
             <span style={{fontSize:14}}>+</span> Transaksi
           </button>
-          <button onClick={onToggleHide} title={hideAmounts?'Tampilkan angka':'Sembunyikan angka'} style={{...S.btnGhost,padding:'10px 12px',fontSize:16,flexShrink:0,borderColor:hideAmounts?C.gold:C.border,color:hideAmounts?C.gold:C.muted}}>
+          <button onClick={onToggleHide} title={hideAmounts?'Tampilkan':'Sembunyikan'} style={{...S.btnGhost,padding:'10px 12px',fontSize:16,flexShrink:0,borderColor:hideAmounts?C.gold:C.border,color:hideAmounts?C.gold:C.muted}}>
             {hideAmounts?'🙈':'👁'}
           </button>
         </div>
+        {/* Profile area at bottom of sidebar */}
+        {ProfileMenu&&(
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:'10px 12px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div style={{minWidth:0,flex:1}}>
+              <p style={{fontSize:11,fontWeight:600,color:isAdmin?C.gold:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{localMode?'Mode Lokal':(fbUser?.displayName||fbUser?.email?.split('@')[0]||'User')}</p>
+              <p style={{fontSize:9,color:C.muted}}>{ isAdmin?'👑 Admin':localMode?'Local':fbUser?.email?.split('@')[0]||''}</p>
+            </div>
+            <ProfileMenu fbUser={fbUser} isAdmin={isAdmin} onLogout={onLogout} setView={setView} localMode={localMode}/>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ═══════════════════ BOTTOM NAV ═══════════════════
-function BottomNav({ view, setView, onAdd }) {
+function BottomNav({ view, setView, onAdd, onMore }) {
   const items = [
-    {id:'dashboard',  emoji:'🏠',label:'Home'},
-    {id:'transactions',emoji:'📋',label:'Transaksi'},
-    {id:'budget',     emoji:'🎯',label:'Budget'},
-    {id:'debts',      emoji:'💸',label:'Hutang'},
-    {id:'analytics',  emoji:'📊',label:'Analitik'},
+    {id:'dashboard',    emoji:'🏠', label:'Beranda'},
+    {id:'wallets-page', emoji:'💳', label:'Kantong'},
+    {id:'_add',         emoji:'+',  label:'',        isCenter:true},
+    {id:'transactions', emoji:'📋', label:'Transaksi'},
+    {id:'_more',        emoji:'☰',  label:'Lainnya'},
+  ];
+  const moreViews = ['analytics','budget','milestones','recurring','debts','export','categories','wallets','admin'];
+  return (
+    <div className="bottomnav" style={{position:'fixed',bottom:0,left:0,right:0,height:62,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',zIndex:100,paddingBottom:'env(safe-area-inset-bottom)'}}>
+      {items.map((item)=>{
+        if(item.isCenter) return (
+          <button key="add" onClick={onAdd} style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',cursor:'pointer'}}>
+            <div style={{width:48,height:48,borderRadius:'50%',background:`linear-gradient(135deg,${C.gold},${C.goldL})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,fontWeight:300,color:'#060208',marginTop:-14,boxShadow:`0 4px 16px ${C.gold}50`}}>+</div>
+          </button>
+        );
+        const isActive = item.id==='_more'
+          ? moreViews.includes(view)
+          : view===item.id;
+        return (
+          <button key={item.id} onClick={item.id==='_more'?onMore:()=>setView(item.id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',cursor:'pointer',gap:2}}>
+            <span style={{fontSize:18,transition:'transform .2s',transform:isActive?'scale(1.15)':'scale(1)'}}>{item.emoji}</span>
+            <span style={{fontSize:9,color:isActive?C.gold:C.muted,fontWeight:isActive?700:400,transition:'color .15s'}}>{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════ MORE SHEET ═══════════════════
+function MoreSheet({ onClose, setView, view, isAdmin }) {
+  const items = [
+    {id:'analytics',  icon:'📊',label:'Analitik'},
+    {id:'budget',     icon:'🎯',label:'Budget'},
+    {id:'milestones', icon:'⭐',label:'Milestone'},
+    {id:'recurring',  icon:'🔄',label:'Berulang'},
+    {id:'debts',      icon:'💸',label:'Hutang/Piutang'},
+    {id:'export',     icon:'📤',label:'Export & Sync'},
+    {id:'categories', icon:'🏷️',label:'Kategori'},
+    {id:'wallets',    icon:'⚙️',label:'Kelola Wallet'},
+    ...(isAdmin?[{id:'admin',icon:'👑',label:'Admin Panel'}]:[]),
   ];
   return (
-    <div className="bottomnav" style={{position:'fixed',bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',zIndex:100,height:64}}>
-      {items.map((item,i)=>(
-        <button key={item.id} onClick={i===2?onAdd:()=>setView(item.id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'none',background:i===2?'transparent':'transparent',cursor:'pointer',gap:2}}>
-          {i===2?(
-            <div style={{width:42,height:42,borderRadius:'50%',background:`linear-gradient(135deg,${C.gold},${C.goldL})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,marginTop:-10,boxShadow:`0 4px 12px ${C.gold}40`}}>+</div>
-          ):(
-            <>
-              <span style={{fontSize:18}}>{item.emoji}</span>
-              <span style={{fontSize:9,color:view===item.id?C.gold:C.muted,fontWeight:view===item.id?600:400}}>{item.label}</span>
-            </>
-          )}
-        </button>
-      ))}
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',backdropFilter:'blur(4px)',zIndex:150,display:'flex',alignItems:'flex-end'}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:C.card,borderRadius:'18px 18px 0 0',width:'100%',padding:'10px 16px 32px',border:`1px solid ${C.border}`,animation:'slideUp .25s ease'}}>
+        <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:'0 auto 16px'}}/>
+        <p style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:12,textTransform:'uppercase',letterSpacing:'1px'}}>Menu Lainnya</p>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+          {items.map(item=>{
+            const active = view===item.id;
+            return (
+              <button key={item.id} onClick={()=>{setView(item.id);onClose();}} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,padding:'12px 4px',borderRadius:12,background:active?'rgba(201,145,58,.1)':C.surface,border:`1px solid ${active?C.gold:C.border}`,cursor:'pointer',color:active?C.gold:C.text,transition:'all .15s'}}>
+                <span style={{fontSize:22}}>{item.icon}</span>
+                <span style={{fontSize:10,textAlign:'center',lineHeight:1.2,color:active?C.gold:C.muted}}>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ PROFILE MENU ═══════════════════
+function ProfileMenu({ fbUser, isAdmin, onLogout, setView, localMode }) {
+  const [open, setOpen] = useState(false);
+  const initial = fbUser?.displayName?.[0]?.toUpperCase()||fbUser?.email?.[0]?.toUpperCase()||'U';
+  return (
+    <div style={{position:'relative'}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:34,height:34,borderRadius:'50%',background:isAdmin?`${C.gold}20`:`${C.blue}20`,border:`2px solid ${isAdmin?C.gold:C.blue}55`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:isAdmin?C.gold:C.blue,fontWeight:700,fontSize:13,flexShrink:0}}>
+        {localMode?'👤':initial}
+      </button>
+      {open&&(
+        <>
+          <div style={{position:'fixed',inset:0,zIndex:99}} onClick={()=>setOpen(false)}/>
+          <div style={{position:'absolute',right:0,top:42,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:8,minWidth:196,zIndex:100,boxShadow:'0 8px 32px rgba(0,0,0,.5)',animation:'fadeIn .15s ease'}}>
+            <div style={{padding:'8px 12px 10px',borderBottom:`1px solid ${C.border}`,marginBottom:4}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                <div style={{width:32,height:32,borderRadius:'50%',background:isAdmin?`${C.gold}20`:`${C.blue}20`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,color:isAdmin?C.gold:C.blue}}>{localMode?'👤':initial}</div>
+                <div>
+                  <p style={{fontSize:13,fontWeight:600,color:C.text,lineHeight:1.2}}>{localMode?'Mode Lokal':(fbUser?.displayName||fbUser?.email?.split('@')[0]||'User')}</p>
+                  <p style={{fontSize:10,color:C.muted}}>{localMode?'Data tersimpan di browser':fbUser?.email}</p>
+                </div>
+              </div>
+              {isAdmin&&<span style={{fontSize:9,background:`${C.gold}20`,color:C.gold,padding:'2px 7px',borderRadius:4,fontWeight:700}}>👑 ADMIN</span>}
+            </div>
+            {[
+              ...(isAdmin?[{icon:'👑',label:'Admin Panel',id:'admin',color:C.gold}]:[]),
+              {icon:'📤',label:'Export & Sync',id:'export',color:C.text},
+              {icon:'⚙️',label:'Kelola Wallet',id:'wallets',color:C.text},
+              {icon:'🏷️',label:'Kategori',id:'categories',color:C.text},
+            ].map(item=>(
+              <button key={item.id} onClick={()=>{setView(item.id);setOpen(false);}} style={{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'9px 12px',background:'none',border:'none',cursor:'pointer',color:item.color||C.text,fontSize:13,borderRadius:8,textAlign:'left',transition:'background .1s'}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.surface} onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                <span>{item.icon}</span>{item.label}
+              </button>
+            ))}
+            <div style={{height:1,background:C.border,margin:'4px 0'}}/>
+            {!localMode&&<button onClick={()=>{onLogout();setOpen(false);}} style={{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'9px 12px',background:'none',border:'none',cursor:'pointer',color:C.expense,fontSize:13,borderRadius:8,transition:'background .1s'}}
+              onMouseEnter={e=>e.currentTarget.style.background='rgba(255,61,96,.08)'} onMouseLeave={e=>e.currentTarget.style.background='none'}>
+              🚪 Logout
+            </button>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════ WALLET PAGE (BANK JAGO STYLE) ═══════════════════
+function WalletPage({ wallets, transactions, hide, onWalletDetail, onTransfer, onAddWallet }) {
+  const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
+
+  const tabs = useMemo(()=>{
+    const used = new Set(wallets.map(w=>w.type));
+    return [
+      {id:'all',label:'Semua'},
+      ...WALLET_TYPES.filter(t=>used.has(t.value)).map(t=>({id:t.value,label:t.label})),
+    ];
+  },[wallets]);
+
+  const filtered = useMemo(()=>{
+    let list = wallets;
+    if(activeTab!=='all') list=list.filter(w=>w.type===activeTab);
+    if(search) list=list.filter(w=>w.name.toLowerCase().includes(search.toLowerCase()));
+    return list;
+  },[wallets,activeTab,search]);
+
+  const tabTotal = useMemo(()=>filtered.reduce((s,w)=>s+w.balance,0),[filtered]);
+
+  return (
+    <div style={{paddingBottom:80}}>
+      {/* Search bar */}
+      <div style={{padding:'10px 14px 8px'}}>
+        <div style={{position:'relative'}}>
+          <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:C.muted,fontSize:14}}>🔍</span>
+          <input className="vi" style={{...S.input,paddingLeft:34,borderRadius:100}} placeholder="Cari Kantong" value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+      </div>
+
+      {/* Scrollable tabs */}
+      <div style={{overflowX:'auto',padding:'4px 14px 12px',display:'flex',gap:8,scrollbarWidth:'none'}} className="hide-scroll">
+        <style>{`.hide-scroll::-webkit-scrollbar{display:none}`}</style>
+        {tabs.map(tab=>(
+          <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{padding:'7px 16px',borderRadius:100,border:`1px solid ${activeTab===tab.id?C.gold:C.border}`,background:activeTab===tab.id?`rgba(201,145,58,.15)`:'transparent',color:activeTab===tab.id?C.gold:C.muted,fontSize:13,fontWeight:activeTab===tab.id?700:400,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,transition:'all .15s'}}>
+            {tab.label}
+          </button>
+        ))}
+        <button onClick={onAddWallet} style={{padding:'7px 14px',borderRadius:100,border:`1px dashed ${C.border}`,background:'transparent',color:C.muted,fontSize:14,cursor:'pointer',flexShrink:0}}>＋</button>
+      </div>
+
+      {/* Total aset */}
+      <div style={{margin:'0 14px 14px',padding:'12px 16px',background:C.card,borderRadius:12,border:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <p style={{fontSize:13,color:C.muted,fontWeight:500}}>Aset {activeTab==='all'?'Saya':(tabs.find(t=>t.id===activeTab)?.label||'')}</p>
+        <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:16,fontWeight:600,color:C.text}}>{fmt(tabTotal)}</p>
+      </div>
+
+      {/* Wallet grid — 2 columns Bank Jago style */}
+      {filtered.length===0?(
+        <div style={{padding:32,textAlign:'center'}}>
+          <p style={{fontSize:32,marginBottom:8}}>💳</p>
+          <p style={{color:C.muted,fontSize:13}}>{search?'Kantong tidak ditemukan.':'Belum ada kantong di tab ini.'}</p>
+        </div>
+      ):(
+        <div style={{padding:'0 10px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          {filtered.map(w=>{
+            const typeLabel = WALLET_TYPES.find(t=>t.value===w.type)?.label||w.type;
+            return (
+              <div key={w.id} onClick={()=>onWalletDetail(w.id)} style={{background:C.card,borderRadius:16,padding:'16px 14px',cursor:'pointer',border:`1px solid ${w.color}33`,minHeight:140,display:'flex',flexDirection:'column',justifyContent:'space-between',transition:'all .2s',position:'relative',overflow:'hidden'}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=w.color+'77';e.currentTarget.style.transform='translateY(-2px)';}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=w.color+'33';e.currentTarget.style.transform='translateY(0)';}}>
+                {/* Subtle bg circle */}
+                <div style={{position:'absolute',right:-12,bottom:-12,width:70,height:70,borderRadius:'50%',background:w.color+'10'}}/>
+                {/* Emoji */}
+                <div style={{width:48,height:48,borderRadius:12,background:w.color+'18',border:`1px solid ${w.color}33`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,marginBottom:10}}>{w.emoji}</div>
+                <div>
+                  <p style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{w.name}</p>
+                  <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:14,fontWeight:500,color:C.text,marginBottom:2}}>{fmt(w.balance)}</p>
+                  <p style={{fontSize:10,color:C.muted}}>{typeLabel}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -2902,6 +3074,7 @@ export default function App() {
   // ── Wallet detail & transfer modal state ──
   const [walletDetailId, setWalletDetailId] = useState(null);
   const [transferFromWallet, setTransferFromWallet] = useState(null);
+  const [showMore, setShowMore] = useState(false);
 
   const openWalletDetail = (walletId) => setWalletDetailId(walletId);
   const openTransferModal = (wallet) => { setTransferFromWallet(wallet||null); };
@@ -2990,6 +3163,16 @@ export default function App() {
 
   const viewProps = {wallets,categories,transactions,milestones,recurringTxs,debts,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance,hide:hideAmounts,onWalletDetail:openWalletDetail,onTransfer:openTransferModal};
 
+  // Page title for header
+  const pageTitle = {
+    'dashboard':'Beranda','wallets-page':'Kantong','transactions':'Transaksi',
+    'analytics':'Analitik','budget':'Budget','milestones':'Milestone',
+    'recurring':'Berulang','debts':'Hutang & Piutang','wallets':'Kelola Wallet',
+    'categories':'Kategori','export':'Export & Sync','admin':'Admin Panel',
+  }[view]||'VAULT';
+
+  const recurringDue = recurringTxs.filter(r=>r.isActive&&r.nextDue<=todayStr()).length;
+
   return (
     <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'system-ui,-apple-system,sans-serif'}} className={hideAmounts?'vault-private':''}>
       <style>{`
@@ -3000,34 +3183,67 @@ export default function App() {
         .sidebar{display:flex;flex-direction:column}
         ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-thumb{background:${C.border};border-radius:4px}
         .bottomnav{display:none}
-        @media(max-width:767px){.sidebar{display:none!important}.bottomnav{display:flex!important}.main-wrap{margin-left:0!important;padding:16px 16px 72px!important}}
+        .app-header{display:none}
+        @media(max-width:767px){
+          .sidebar{display:none!important}
+          .bottomnav{display:flex!important}
+          .app-header{display:flex!important}
+          .main-wrap{margin-left:0!important;padding:0 0 72px!important;padding-top:58px!important}
+        }
         @keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
         .vault-private .vault-amt{filter:blur(7px);transition:filter .2s;user-select:none}
         .vault-private .vault-amt:hover{filter:blur(0)}
       `}</style>
 
+      {/* Mobile header */}
+      <div className="app-header" style={{position:'fixed',top:0,left:0,right:0,height:56,background:C.surface,borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',zIndex:90}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          {view!=='dashboard'&&view!=='wallets-page'&&(
+            <button onClick={()=>setView('dashboard')} style={{background:'none',border:'none',cursor:'pointer',color:C.text,fontSize:20,padding:'0 6px 0 0'}}>‹</button>
+          )}
+          <span style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:17,color:C.text}}>{pageTitle}</span>
+          {recurringDue>0&&view!=='recurring'&&(
+            <span style={{background:C.expense,color:'#fff',borderRadius:'50%',width:16,height:16,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700}}>{recurringDue}</span>
+          )}
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <button onClick={()=>setHideAmounts(h=>!h)} style={{background:'none',border:'none',cursor:'pointer',color:hideAmounts?C.gold:C.muted,fontSize:16,padding:4}}>{hideAmounts?'🙈':'👁'}</button>
+          <ProfileMenu fbUser={fbUser} isAdmin={isAdmin} onLogout={handleLogout} setView={setView} localMode={localMode}/>
+        </div>
+      </div>
+
+      {/* Desktop sidebar */}
       <Sidebar view={view} setView={setView} onAdd={openAdd} totalBalance={totalBalance}
         wallets={wallets} saveIndicator={saveIndicator} lsOk={lsOk||useFirebase}
         fbUser={fbUser} isAdmin={isAdmin} localMode={localMode} onLogout={handleLogout}
         onToggleHide={()=>setHideAmounts(h=>!h)} hideAmounts={hideAmounts}
-        recurringDue={recurringTxs.filter(r=>r.isActive&&r.nextDue<=todayStr()).length}/>
+        recurringDue={recurringDue} ProfileMenu={ProfileMenu}/>
 
+      {/* Main content */}
       <div className="main-wrap" style={{marginLeft:220,padding:'24px 28px',maxWidth:1100,minHeight:'100vh'}}>
-        {view==='admin'  && <AdminPanel currentUser={fbUser} onBack={()=>setView('dashboard')}/>}
-        {view==='dashboard'   && <Dashboard {...viewProps}/>}
+        {view==='admin'        && <AdminPanel currentUser={fbUser} onBack={()=>setView('dashboard')}/>}
+        {view==='dashboard'    && <Dashboard {...viewProps}/>}
+        {view==='wallets-page' && <WalletPage wallets={wallets} transactions={transactions} hide={hideAmounts} onWalletDetail={openWalletDetail} onTransfer={openTransferModal} onAddWallet={()=>setView('wallets')}/>}
         {view==='transactions' && <TransactionList {...viewProps}/>}
-        {view==='analytics'   && <Analytics {...viewProps}/>}
-        {view==='milestones'  && <MilestoneView milestones={milestones} setMilestones={setMilestones} wallets={wallets}/>}
-        {view==='budget'      && <BudgetView categories={categories} setCategories={setCategories} transactions={transactions}/>}
-        {view==='recurring'   && <RecurringView recurringTxs={recurringTxs} setRecurringTxs={setRecurringTxs} wallets={wallets} categories={categories} onApplyRecurring={handleApplyRecurring}/>}
-        {view==='debts'       && <DebtView debts={debts} setDebts={setDebts}/>}
-        {view==='wallets'     && <WalletManager wallets={wallets} setWallets={setWallets} transactions={transactions}/>}
-        {view==='categories'  && <CategoryManager categories={categories} setCategories={setCategories} transactions={transactions}/>}
-        {view==='export'      && <ExportView transactions={transactions} wallets={wallets} categories={categories} onReset={handleResetAll} lsOk={lsOk||useFirebase}/>}
+        {view==='analytics'    && <Analytics {...viewProps}/>}
+        {view==='milestones'   && <MilestoneView milestones={milestones} setMilestones={setMilestones} wallets={wallets}/>}
+        {view==='budget'       && <BudgetView categories={categories} setCategories={setCategories} transactions={transactions}/>}
+        {view==='recurring'    && <RecurringView recurringTxs={recurringTxs} setRecurringTxs={setRecurringTxs} wallets={wallets} categories={categories} onApplyRecurring={handleApplyRecurring}/>}
+        {view==='debts'        && <DebtView debts={debts} setDebts={setDebts}/>}
+        {view==='wallets'      && <WalletManager wallets={wallets} setWallets={setWallets} transactions={transactions}/>}
+        {view==='categories'   && <CategoryManager categories={categories} setCategories={setCategories} transactions={transactions}/>}
+        {view==='export'       && <ExportView transactions={transactions} wallets={wallets} categories={categories} onReset={handleResetAll} lsOk={lsOk||useFirebase}/>}
       </div>
 
-      <BottomNav view={view} setView={setView} onAdd={openAdd}/>
+      {/* Bottom nav (mobile) */}
+      <BottomNav view={view} setView={setView} onAdd={openAdd} onMore={()=>setShowMore(true)}/>
 
+      {/* More sheet (mobile) */}
+      {showMore&&<MoreSheet onClose={()=>setShowMore(false)} setView={setView} view={view} isAdmin={isAdmin}/>}
+
+      {/* Modals */}
       {txModal&&(
         <TxModal wallets={wallets} categories={categories} editTx={editTx}
           onClose={()=>{setTxModal(false);setEditTx(null);}} onSave={onSave}/>
