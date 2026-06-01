@@ -37,7 +37,7 @@ const FIREBASE_CONFIG = {
 // 👑 Admin — bisa lihat semua data user
 const ADMIN_EMAIL = "zaidan1408@gmail.com";
 
-const FB_ON = FIREBASE_CONFIG.apiKey !== "AIzaSyC7ZoqG00x6-oZHXlTzk7frKTUh5VkCqmY";
+const FB_ON = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"; // true = Firebase aktif
 let fbAuth = null, fbDb = null;
 if (FB_ON) {
   try {
@@ -1560,16 +1560,7 @@ function WalletManager({ wallets, setWallets, transactions }) {
           </div>
           <div style={{marginBottom:10}}><label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Saldo</label>
             <input className="vi" style={{...S.input}} type="number" placeholder="Saldo (Rp)" value={form.balance} onChange={e=>setForm(p=>({...p,balance:e.target.value}))}/></div>
-          {tab==='expense'&&(
-            <div style={{marginBottom:10}}>
-              <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:4}}>Kelompok 50/30/20</label>
-              <div style={{display:'flex',gap:6}}>
-                {[['needs','50% Kebutuhan','#38BDF8'],['wants','30% Keinginan','#F472B6'],['savings','20% Tabungan','#4ADE80'],[null,'Belum ditentukan','#3D5580']].map(([val,lbl,col])=>(
-                  <button key={String(val)} onClick={()=>setForm(p=>({...p,bucket:val}))} style={{flex:1,padding:'7px 4px',borderRadius:6,border:`1px solid ${form.bucket===val?col:C.border}`,background:form.bucket===val?col+'20':'transparent',color:form.bucket===val?col:C.muted,fontSize:11,cursor:'pointer',fontWeight:form.bucket===val?600:400,transition:'all .15s',textAlign:'center'}}>{lbl}</button>
-                ))}
-              </div>
-            </div>
-          )}
+          
           <div style={{marginBottom:14}}>
             <label style={{fontSize:12,color:C.muted,display:'block',marginBottom:6}}>Warna</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
