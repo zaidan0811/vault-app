@@ -409,7 +409,7 @@ function Onboarding({ onComplete }) {
 }
 
 // ═══════════════════ TRANSACTION MODAL ═══════════════════
-function TxModal({ wallets, categories, editTx, onClose, onSave }) {
+function TxModal({ wallets, categories, editTx, onClose, onSave, walletMode=true }) {
   const [form, setForm] = useState({
     type: editTx?.type||'expense',
     amount: editTx?.amount||'',
@@ -480,10 +480,10 @@ function TxModal({ wallets, categories, editTx, onClose, onSave }) {
   };
 
   const handleSubmit = () => {
-    if(!form.amount||!form.walletId||!form.categoryId||!form.description) return;
-    onSave({...form, amount:parseFloat(form.amount)||0});
+    if(!form.amount||(walletMode&&!form.walletId)||!form.categoryId||!form.description) return;
+    onSave({...form, walletId:walletMode?form.walletId:(form.walletId||wallets[0]?.id||''), amount:parseFloat(form.amount)||0});
   };
-  const isValid = form.amount&&form.walletId&&form.categoryId&&form.description;
+  const isValid = form.amount&&(walletMode?form.walletId:true)&&form.categoryId&&form.description;
 
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0 0 16px'}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
@@ -571,12 +571,12 @@ function TxModal({ wallets, categories, editTx, onClose, onSave }) {
           </div>
           <div style={{marginBottom:10}}><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Deskripsi *</label>
             <input className="vi" style={{...S.input}} placeholder="Deskripsi transaksi" value={form.description} onChange={e=>set('description',e.target.value)}/></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-            <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Wallet *</label>
+          <div style={{display:'grid',gridTemplateColumns:walletMode?'1fr 1fr':'1fr',gap:10,marginBottom:10}}>
+            {walletMode&&(<div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Wallet *</label>
               <select className="vi" style={{...S.input}} value={form.walletId} onChange={e=>set('walletId',e.target.value)}>
                 <option value="">Pilih wallet</option>
                 {wallets.map(w=><option key={w.id} value={w.id}>{w.emoji} {w.name}</option>)}
-              </select></div>
+              </select></div>)}
             <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Kategori *</label>
               <select className="vi" style={{...S.input}} value={form.categoryId} onChange={e=>set('categoryId',e.target.value)}>
                 <option value="">Pilih kategori</option>
@@ -794,11 +794,11 @@ function WalletDetail({ wallet, wallets, transactions, categories, onClose, onTr
 }
 
 // ═══════════════════ SIDEBAR ═══════════════════
-function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, lsOk, fbUser, isAdmin, localMode, onLogout, onToggleHide, hideAmounts, recurringDue, ProfileMenu }) {
+function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, lsOk, fbUser, isAdmin, localMode, onLogout, onToggleHide, hideAmounts, recurringDue, ProfileMenu, walletMode=true }) {
   const today = new Date().toISOString().split('T')[0];
   const navItems = [
     {id:'dashboard',   icon:'🏠', label:'Beranda'},
-    {id:'wallets-page',icon:'💳', label:'Kantong'},
+    ...(walletMode?[{id:'wallets-page',icon:'💳', label:'Kantong'}]:[]),
     {id:'transactions',icon:'📋', label:'Transaksi'},
     {id:'analytics',   icon:'📊', label:'Analitik'},
     {id:'budget',      icon:'🎯', label:'Budget'},
@@ -808,6 +808,7 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
     {id:'wallets',     icon:'⚙️', label:'Kelola Wallet'},
     {id:'categories',  icon:'🏷️', label:'Kategori'},
     {id:'export',      icon:'📤', label:'Export & Sync'},
+    {id:'settings',    icon:'🔧', label:'Pengaturan'},
   ];
   return (
     <div style={{position:'fixed',top:0,left:0,bottom:0,width:220,background:C.surface,borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',zIndex:50,overflowY:'auto'}} className="sidebar">
@@ -904,10 +905,10 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
 }
 
 // ═══════════════════ BOTTOM NAV ═══════════════════
-function BottomNav({ view, setView, onAdd, onMore }) {
+function BottomNav({ view, setView, onAdd, onMore, walletMode=true }) {
   const items = [
     {id:'dashboard',    emoji:'🏠', label:'Beranda'},
-    {id:'wallets-page', emoji:'💳', label:'Kantong'},
+    ...(walletMode?[{id:'wallets-page', emoji:'💳', label:'Kantong'}]:[]),
     {id:'_add',         emoji:'+',  label:'',        isCenter:true},
     {id:'transactions', emoji:'📋', label:'Transaksi'},
     {id:'_more',        emoji:'☰',  label:'Lainnya'},
@@ -946,6 +947,7 @@ function MoreSheet({ onClose, setView, view, isAdmin }) {
     {id:'export',     icon:'📤',label:'Export & Sync'},
     {id:'categories', icon:'🏷️',label:'Kategori'},
     {id:'wallets',    icon:'⚙️',label:'Kelola Wallet'},
+    {id:'settings',   icon:'🔧',label:'Pengaturan'},
     ...(isAdmin?[{id:'admin',icon:'👑',label:'Admin Panel'}]:[]),
   ];
   return (
@@ -994,6 +996,7 @@ function ProfileMenu({ fbUser, isAdmin, onLogout, setView, localMode }) {
             </div>
             {[
               ...(isAdmin?[{icon:'👑',label:'Admin Panel',id:'admin',color:C.gold}]:[]),
+              {icon:'🔧',label:'Pengaturan',id:'settings',color:C.text},
               {icon:'📤',label:'Export & Sync',id:'export',color:C.text},
               {icon:'⚙️',label:'Kelola Wallet',id:'wallets',color:C.text},
               {icon:'🏷️',label:'Kategori',id:'categories',color:C.text},
@@ -1097,7 +1100,7 @@ function WalletPage({ wallets, transactions, hide, onWalletDetail, onTransfer, o
 }
 
 // ═══════════════════ DASHBOARD ═══════════════════
-function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onEdit, onDelete, hide, onWalletDetail, onTransfer }) {
+function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onEdit, onDelete, hide, onWalletDetail, onTransfer, settings={walletMode:true} }) {
   const thisMonth = currentMonth();
   const monthTxs = transactions.filter(t=>monthStr(t.date)===thisMonth);
   const monthInc = monthTxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
@@ -1135,8 +1138,8 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
         </div>
       </div>
 
-      {/* Wallet cards */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:10,marginBottom:20}}>
+      {/* Wallet cards — only walletMode on */}
+      {settings.walletMode&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:10,marginBottom:20}}>
         {wallets.map(w=>(
           <div key={w.id} style={{...S.card,padding:14,borderColor:w.color+'33',position:'relative',overflow:'hidden'}}>
             <div style={{position:'absolute',right:-10,top:-10,width:60,height:60,borderRadius:'50%',background:w.color+'11'}}/>
@@ -1146,7 +1149,9 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
             <div style={{width:28,height:3,borderRadius:2,background:w.color,marginTop:8,opacity:.6}}/>
           </div>
         ))}
-      </div>
+      </div>}
+      {!settings.walletMode&&<div style={{...S.card,padding:12,marginBottom:20,background:'rgba(79,126,255,.05)',borderColor:'rgba(79,126,255,.2)',display:'flex',alignItems:'center',gap:10}}>
+        <span style={{fontSize:20}}>ℹ️</span><div><p style={{fontSize:13,color:C.blue,fontWeight:500}}>Mode Sederhana aktif</p><p style={{fontSize:11,color:C.muted}}>Aktifkan Mode Kantong di Pengaturan untuk tracking saldo per wallet.</p></div></div>}
 
       {/* Recent transactions */}
       <div style={{...S.card,overflow:'hidden'}}>
@@ -2687,6 +2692,110 @@ function MilestoneView({ milestones, setMilestones, wallets }) {
   );
 }
 
+// ═══════════════════ TOGGLE HELPER ═══════════════════
+function Toggle({ checked, onChange, label, desc, disabled }) {
+  return (
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:16,opacity:disabled?.5:1}}>
+      <div style={{flex:1}}>
+        {label&&<p style={{fontSize:14,fontWeight:500,color:C.text,marginBottom:desc?3:0}}>{label}</p>}
+        {desc&&<p style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{desc}</p>}
+      </div>
+      <div onClick={disabled?undefined:()=>onChange(!checked)} style={{width:44,height:24,borderRadius:12,background:checked?C.gold:C.border,position:'relative',cursor:disabled?'default':'pointer',transition:'background .2s',flexShrink:0,marginTop:2}}>
+        <div style={{position:'absolute',top:2,left:checked?22:2,width:20,height:20,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.4)'}}/>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ MIGRATION PROMPT ═══════════════════
+function MigrationPrompt({ localData, onImport, onSkip }) {
+  const [loading, setLoading] = useState(false);
+  const doImport = async () => { setLoading(true); await onImport(localData); };
+  return (
+    <div style={{background:C.bg,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'system-ui,sans-serif'}}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
+      <div style={{width:'100%',maxWidth:420}}>
+        <div style={{textAlign:'center',marginBottom:24}}>
+          <div style={{fontSize:48,marginBottom:8}}>📦</div>
+          <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:22,color:C.text,marginBottom:6}}>Data Lokal Ditemukan!</h2>
+          <p style={{color:C.muted,fontSize:14}}>Kami temukan data dari sesi sebelumnya di browser ini.</p>
+        </div>
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,marginBottom:16}}>
+          <p style={{fontSize:13,fontWeight:600,color:C.gold,marginBottom:12}}>📊 Ringkasan Data Lokal</p>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:12}}>
+            {[[localData.wallets?.length||0,'Wallet','💳'],[localData.transactions?.length||0,'Transaksi','📋'],[localData.milestones?.length||0,'Milestone','🎯']].map(([n,l,e])=>(
+              <div key={l} style={{background:C.surface,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
+                <p style={{fontSize:20}}>{e}</p>
+                <p style={{fontFamily:'DM Mono,monospace',fontSize:18,fontWeight:500,color:C.text}}>{n}</p>
+                <p style={{fontSize:10,color:C.muted}}>{l}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{background:'rgba(201,145,58,.08)',border:`1px solid rgba(201,145,58,.2)`,borderRadius:8,padding:10}}>
+            <p style={{fontSize:12,color:C.gold}}>💡 Import akan memindahkan semua wallet, transaksi, dan data lainnya ke akun Firebase kamu.</p>
+          </div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <button onClick={doImport} disabled={loading} style={{background:`linear-gradient(135deg,${C.gold},${C.goldL})`,color:'#060208',fontWeight:700,border:'none',borderRadius:10,padding:'14px',fontSize:15,cursor:'pointer',opacity:loading?.7:1}}>
+            {loading?'⏳ Mengimpor data...':'✅ Import Data ke Akun Ini'}
+          </button>
+          <button onClick={onSkip} style={{background:'transparent',border:`1px solid ${C.border}`,color:C.muted,borderRadius:10,padding:'12px',fontSize:14,cursor:'pointer'}}>
+            🆕 Mulai dari Nol (Abaikan Data Lama)
+          </button>
+        </div>
+        <p style={{textAlign:'center',fontSize:11,color:C.muted,marginTop:12}}>Data lama di browser tidak akan dihapus otomatis.</p>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ SETTINGS VIEW ═══════════════════
+function SettingsView({ settings, setSettings, fbUser, isAdmin, localMode }) {
+  return (
+    <div>
+      <div style={{marginBottom:20}}>
+        <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:22,color:C.text,marginBottom:4}}>⚙️ Pengaturan</h2>
+        <p style={{color:C.muted,fontSize:13}}>Kustomisasi cara kerja VAULT untuk kamu.</p>
+      </div>
+      <div style={{...S.card,padding:16,marginBottom:14}}>
+        <p style={{fontSize:12,fontWeight:700,color:C.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:12}}>Akun</p>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <div style={{width:44,height:44,borderRadius:'50%',background:isAdmin?`${C.gold}20`:`${C.blue}20`,border:`2px solid ${isAdmin?C.gold:C.blue}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:700,color:isAdmin?C.gold:C.blue,flexShrink:0}}>
+            {localMode?'👤':(fbUser?.displayName?.[0]||fbUser?.email?.[0]||'U')?.toUpperCase()}
+          </div>
+          <div>
+            <p style={{fontSize:14,fontWeight:600,color:C.text}}>{localMode?'Mode Lokal':(fbUser?.displayName||fbUser?.email?.split('@')[0]||'User')}</p>
+            <p style={{fontSize:12,color:C.muted}}>{localMode?'Data hanya di browser ini':fbUser?.email}</p>
+            {isAdmin&&<span style={{fontSize:10,background:`${C.gold}20`,color:C.gold,padding:'2px 7px',borderRadius:4,fontWeight:700}}>👑 ADMIN</span>}
+          </div>
+        </div>
+      </div>
+      <div style={{...S.card,padding:16,marginBottom:14}}>
+        <p style={{fontSize:12,fontWeight:700,color:C.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:14}}>Mode Pencatatan</p>
+        <Toggle checked={settings.walletMode} onChange={v=>setSettings(p=>({...p,walletMode:v}))}
+          label="🏦 Mode Kantong (Multi-Wallet)"
+          desc="Aktif: tracking saldo per wallet, fitur transfer, halaman Kantong tersedia. Nonaktif: catat pemasukan & pengeluaran saja tanpa wallet."/>
+        {!settings.walletMode&&(
+          <div style={{background:'rgba(79,126,255,.08)',border:`1px solid rgba(79,126,255,.2)`,borderRadius:8,padding:10,marginTop:12}}>
+            <p style={{fontSize:12,color:C.blue}}>ℹ️ Mode Sederhana aktif. Transaksi tetap tersimpan ke wallet pertama secara otomatis di latar belakang.</p>
+          </div>
+        )}
+      </div>
+      <div style={{...S.card,padding:16,marginBottom:14,opacity:.6}}>
+        <p style={{fontSize:12,fontWeight:700,color:C.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:14}}>Tampilan</p>
+        <Toggle checked={false} onChange={()=>{}} label="🌙 Dark Mode" desc="Segera hadir di Update 1.3 — Liquid Glass UI" disabled/>
+      </div>
+      <div style={{...S.card,padding:16,borderColor:'rgba(255,61,96,.2)'}}>
+        <p style={{fontSize:12,fontWeight:700,color:C.expense,letterSpacing:'1px',textTransform:'uppercase',marginBottom:12}}>Zona Bahaya</p>
+        <p style={{fontSize:13,color:C.muted,marginBottom:10}}>Hapus semua data dan mulai dari nol. Tidak bisa di-undo!</p>
+        <button onClick={()=>{if(window.confirm('Reset semua data VAULT? Tidak bisa di-undo!'))window.location.reload();}} style={{background:'rgba(255,61,96,.1)',border:'1px solid rgba(255,61,96,.3)',color:C.expense,borderRadius:8,padding:'10px 16px',fontSize:13,cursor:'pointer',width:'100%',fontWeight:600}}>
+          🗑️ Reset Semua Data
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════ LOGIN SCREEN ═══════════════════
 function LoginScreen({ onLocalMode }) {
   const [mode, setMode] = useState('login');
@@ -2939,6 +3048,8 @@ export default function App() {
   const [editTx, setEditTx]     = useState(null);
   const [saveIndicator, setSaveIndicator] = useState('');
   const [dataLoading, setDataLoading] = useState(false);
+  const [settings, setSettings] = useState({ walletMode: true });
+  const [migrationData, setMigrationData] = useState(null);
 
   const isAdmin = fbUser?.email === ADMIN_EMAIL;
   const useFirebase = FB_ON && (fbUser || false) && !localMode;
@@ -2952,18 +3063,27 @@ export default function App() {
       if(user) {
         setDataLoading(true);
         const data = await loadVault(user.uid);
-        if(data) {
+        if(data && data.setupDone) {
           setWallets(data.wallets||[]);
           setCategories(data.categories||[]);
           setTransactions(data.transactions||[]);
           setMilestones(data.milestones||[]);
           setRecurringTxs(data.recurringTxs||[]);
           setDebts(data.debts||[]);
-          setReady(!!data.setupDone);
+          setSettings(data.settings||{walletMode:true});
+          setReady(true);
+        } else {
+          const lsWallets = LS.get('vault_wallets',[]);
+          if(LS.get('vault_ready',false) && lsWallets.length>0) {
+            setMigrationData({ wallets:LS.get('vault_wallets',[]), categories:LS.get('vault_categories',[]),
+              transactions:LS.get('vault_transactions',[]), milestones:LS.get('vault_milestones',[]),
+              recurringTxs:LS.get('vault_recurring',[]), debts:LS.get('vault_debts',[]) });
+          }
         }
         setDataLoading(false);
       } else {
-        setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setRecurringTxs([]); setDebts([]); setReady(false);
+        setWallets([]); setCategories([]); setTransactions([]); setMilestones([]); setRecurringTxs([]); setDebts([]);
+        setReady(false); setMigrationData(null);
       }
     });
     return ()=>unsub();
@@ -3030,6 +3150,14 @@ export default function App() {
     } else if(!FB_ON && lsOk) { LS.set('vault_debts', debts); }
   },[debts]);
 
+  useEffect(()=>{
+    if(!ready) return;
+    if(useFirebase && fbUser) {
+      saveVault(fbUser.uid, { wallets, categories, transactions, milestones, recurringTxs, debts, settings, setupDone:true,
+        userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
+    } else if(!FB_ON && lsOk) { LS.set('vault_settings', settings); }
+  },[settings]);
+
   const handleSetupComplete = ({wallets:w, categories:c}) => {
     setWallets(w); setCategories(c);
     if(useFirebase && fbUser) {
@@ -3039,6 +3167,21 @@ export default function App() {
       LS.set('vault_wallets',w); LS.set('vault_categories',c); LS.set('vault_milestones',[]); LS.set('vault_ready',true);
     }
     setReady(true);
+  };
+
+  const handleImportMigration = async (localData) => {
+    setWallets(localData.wallets||[]); setCategories(localData.categories||[]);
+    setTransactions(localData.transactions||[]); setMilestones(localData.milestones||[]);
+    setRecurringTxs(localData.recurringTxs||[]); setDebts(localData.debts||[]);
+    const s = {walletMode:true};
+    setSettings(s);
+    if(useFirebase && fbUser) {
+      await saveVault(fbUser.uid, { wallets:localData.wallets||[], categories:localData.categories||[],
+        transactions:localData.transactions||[], milestones:localData.milestones||[],
+        recurringTxs:localData.recurringTxs||[], debts:localData.debts||[],
+        settings:s, setupDone:true, userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
+    }
+    setReady(true); setMigrationData(null);
   };
 
   const handleResetAll = () => {
@@ -3128,6 +3271,10 @@ export default function App() {
 
   if(FB_ON && !fbUser && !localMode) return <LoginScreen onLocalMode={()=>setLocalMode(true)}/>;
 
+  if(migrationData) return (
+    <MigrationPrompt localData={migrationData} onImport={handleImportMigration} onSkip={()=>setMigrationData(null)}/>
+  );
+
   if(dataLoading) return (
     <div style={{background:C.bg,minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'system-ui,sans-serif'}}>
       <div style={{textAlign:'center'}}>
@@ -3152,14 +3299,14 @@ export default function App() {
     </div>
   );
 
-  const viewProps = {wallets,categories,transactions,milestones,recurringTxs,debts,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance,hide:hideAmounts,onWalletDetail:openWalletDetail,onTransfer:openTransferModal};
+  const viewProps = {wallets,categories,transactions,milestones,recurringTxs,debts,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance,hide:hideAmounts,onWalletDetail:openWalletDetail,onTransfer:openTransferModal,settings};
 
   // Page title for header
   const pageTitle = {
     'dashboard':'Beranda','wallets-page':'Kantong','transactions':'Transaksi',
     'analytics':'Analitik','budget':'Budget','milestones':'Milestone',
     'recurring':'Berulang','debts':'Hutang & Piutang','wallets':'Kelola Wallet',
-    'categories':'Kategori','export':'Export & Sync','admin':'Admin Panel',
+    'categories':'Kategori','export':'Export & Sync','admin':'Admin Panel','settings':'Pengaturan',
   }[view]||'VAULT';
 
   const recurringDue = recurringTxs.filter(r=>r.isActive&&r.nextDue<=todayStr()).length;
@@ -3210,7 +3357,7 @@ export default function App() {
         wallets={wallets} saveIndicator={saveIndicator} lsOk={lsOk||useFirebase}
         fbUser={fbUser} isAdmin={isAdmin} localMode={localMode} onLogout={handleLogout}
         onToggleHide={()=>setHideAmounts(h=>!h)} hideAmounts={hideAmounts}
-        recurringDue={recurringDue} ProfileMenu={ProfileMenu}/>
+        recurringDue={recurringDue} ProfileMenu={ProfileMenu} walletMode={settings.walletMode}/>
 
       {/* Main content */}
       <div className="main-wrap" style={{marginLeft:220,padding:'24px 28px',maxWidth:1100,minHeight:'100vh'}}>
@@ -3226,10 +3373,11 @@ export default function App() {
         {view==='wallets'      && <WalletManager wallets={wallets} setWallets={setWallets} transactions={transactions}/>}
         {view==='categories'   && <CategoryManager categories={categories} setCategories={setCategories} transactions={transactions}/>}
         {view==='export'       && <ExportView transactions={transactions} wallets={wallets} categories={categories} onReset={handleResetAll} lsOk={lsOk||useFirebase}/>}
+        {view==='settings'     && <SettingsView settings={settings} setSettings={setSettings} fbUser={fbUser} isAdmin={isAdmin} localMode={localMode}/>}
       </div>
 
       {/* Bottom nav (mobile) */}
-      <BottomNav view={view} setView={setView} onAdd={openAdd} onMore={()=>setShowMore(true)}/>
+      <BottomNav view={view} setView={setView} onAdd={openAdd} onMore={()=>setShowMore(true)} walletMode={settings.walletMode}/>
 
       {/* More sheet (mobile) */}
       {showMore&&<MoreSheet onClose={()=>setShowMore(false)} setView={setView} view={view} isAdmin={isAdmin}/>}
@@ -3237,7 +3385,8 @@ export default function App() {
       {/* Modals */}
       {txModal&&(
         <TxModal wallets={wallets} categories={categories} editTx={editTx}
-          onClose={()=>{setTxModal(false);setEditTx(null);}} onSave={onSave}/>
+          onClose={()=>{setTxModal(false);setEditTx(null);}} onSave={onSave}
+          walletMode={settings.walletMode}/>
       )}
       {transferFromWallet&&(
         <TransferModal wallets={wallets} onClose={()=>setTransferFromWallet(null)} onTransfer={handleTransfer}/>
