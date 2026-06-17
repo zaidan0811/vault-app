@@ -37,6 +37,10 @@ const FIREBASE_CONFIG = {
 // 👑 Admin — bisa lihat semua data user
 const ADMIN_EMAIL = "zaidan1408@gmail.com";
 
+// 🔑 Claude API Key — isi dengan API key dari console.anthropic.com (format: sk-ant-...)
+const CLAUDE_API_KEY = "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";
+const AI_ON = CLAUDE_API_KEY !== "YOUR_CLAUDE_API_KEY"; // true = fitur AI text/OCR aktif
+
 const FB_ON = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"; // true = Firebase aktif
 let fbAuth = null, fbDb = null;
 if (FB_ON) {
@@ -125,7 +129,8 @@ async function parseVoice(text, wallets, categories) {
   const ec = categories.filter(c=>c.type==='expense'||c.type==='both').map(c=>c.name).join(', ');
   const prompt = `Kamu parser transaksi keuangan Indonesia. Extract info dari teks dan return HANYA JSON valid.\n\nWallet: ${wl}\nKategori Income: ${ic}\nKategori Expense: ${ec}\nHari ini: ${todayStr()}\n\nAturan:\n- "25rb/25ribu/25k"=25000, "1jt/1juta"=1000000, "500k"=500000\n- beli/bayar/makan/belanja/keluar/habis/isi=expense\n- gaji/terima/dapat/masuk/transfer dari=income\n- Pilih wallet & kategori terdekat dari list\n\nFormat JSON: {"type":"income|expense","amount":integer,"description":"max 40 char","category":"dari list","wallet":"dari list","date":"YYYY-MM-DD"}\n\nTeks: "${text}"\n\nJSON:`;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:prompt}]})});
+    if(!AI_ON) return null;
+    const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:prompt}]})});
     const d = await r.json();
     return JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
   } catch(e) { return null; }
@@ -147,8 +152,9 @@ Hari ini: ${todayStr()}
 Aturan: struk belanja/QRIS=expense, bukti transfer keluar=expense, transfer masuk=income, nota penjualan=income.
 Kalau bukan bukti transaksi keuangan, return {"error":"bukan bukti transaksi"}.`;
   try {
+    if(!AI_ON) return null;
     const res = await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
+      method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
       body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,
         messages:[{role:"user",content:[
           {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
@@ -512,6 +518,12 @@ function TxModal({ wallets, categories, editTx, onClose, onSave, walletMode=true
           {/* ── AI INPUT MODE ── */}
           {inputMode==='ai'&&(
             <div style={{...S.card,padding:14,marginBottom:14}}>
+              {!AI_ON&&(
+                <div style={{background:'rgba(255,61,96,.08)',border:'1px solid rgba(255,61,96,.25)',borderRadius:8,padding:10,marginBottom:10}}>
+                  <p style={{fontSize:12,color:C.expense,fontWeight:600,marginBottom:2}}>⚠️ Claude API Key belum diisi</p>
+                  <p style={{fontSize:11,color:C.muted,lineHeight:1.4}}>Isi konstanta <span style={{fontFamily:'DM Mono,monospace'}}>CLAUDE_API_KEY</span> di bagian konfigurasi kode (dekat FIREBASE_CONFIG) dengan API key dari console.anthropic.com biar fitur AI aktif.</p>
+                </div>
+              )}
               <p style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:4}}>✍️ Ceritakan Transaksinya</p>
               <p style={{fontSize:11,color:C.muted,marginBottom:10}}>Tulis bebas: "tadi bayar makan siang di warteg 25rb dari BRI" atau "gaji 5jt masuk BCA"</p>
               <textarea className="vi" style={{...S.input,height:72,resize:'none',marginBottom:8}} placeholder={'Ceritakan transaksinya...\nContoh: "habis belanja di indomaret 87rb pakai gopay"'} value={aiText} onChange={e=>setAiText(e.target.value)}/>
@@ -1141,7 +1153,9 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
       {/* Wallet cards — only walletMode on */}
       {settings.walletMode&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:10,marginBottom:20}}>
         {wallets.map(w=>(
-          <div key={w.id} style={{...S.card,padding:14,borderColor:w.color+'33',position:'relative',overflow:'hidden'}}>
+          <div key={w.id} onClick={()=>onWalletDetail&&onWalletDetail(w.id)} style={{...S.card,padding:14,borderColor:w.color+'33',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=w.color+'77';e.currentTarget.style.transform='translateY(-2px)';}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=w.color+'33';e.currentTarget.style.transform='translateY(0)';}}>
             <div style={{position:'absolute',right:-10,top:-10,width:60,height:60,borderRadius:'50%',background:w.color+'11'}}/>
             <div style={{fontSize:20,marginBottom:8}}>{w.emoji}</div>
             <p style={{fontSize:12,color:C.muted,marginBottom:2}}>{w.name}</p>
@@ -3157,6 +3171,11 @@ export default function App() {
         userEmail:fbUser.email, userName:fbUser.displayName||fbUser.email });
     } else if(!FB_ON && lsOk) { LS.set('vault_settings', settings); }
   },[settings]);
+
+  // Kalau Mode Kantong dimatikan saat user masih di halaman Kantong, balik ke Dashboard
+  useEffect(()=>{
+    if(!settings.walletMode && view==='wallets-page') setView('dashboard');
+  },[settings.walletMode]);
 
   const handleSetupComplete = ({wallets:w, categories:c}) => {
     setWallets(w); setCategories(c);
