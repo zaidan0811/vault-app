@@ -130,7 +130,7 @@ async function parseVoice(text, wallets, categories) {
   const prompt = `Kamu parser transaksi keuangan Indonesia. Extract info dari teks dan return HANYA JSON valid.\n\nWallet: ${wl}\nKategori Income: ${ic}\nKategori Expense: ${ec}\nHari ini: ${todayStr()}\n\nAturan:\n- "25rb/25ribu/25k"=25000, "1jt/1juta"=1000000, "500k"=500000\n- beli/bayar/makan/belanja/keluar/habis/isi=expense\n- gaji/terima/dapat/masuk/transfer dari=income\n- Pilih wallet & kategori terdekat dari list\n\nFormat JSON: {"type":"income|expense","amount":integer,"description":"max 40 char","category":"dari list","wallet":"dari list","date":"YYYY-MM-DD"}\n\nTeks: "${text}"\n\nJSON:`;
   try {
     if(!AI_ON) return null;
-    const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:prompt}]})});
+    const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:300,messages:[{role:"user",content:prompt}]})});
     const d = await r.json();
     return JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
   } catch(e) { return null; }
@@ -154,8 +154,8 @@ Kalau bukan bukti transaksi keuangan, return {"error":"bukan bukti transaksi"}.`
   try {
     if(!AI_ON) return null;
     const res = await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,
+      method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:400,
         messages:[{role:"user",content:[
           {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
           {type:"text",text:prompt}
