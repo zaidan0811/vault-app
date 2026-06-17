@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip,
   ResponsiveContainer, AreaChart, Area, Legend
@@ -37,9 +37,6 @@ const FIREBASE_CONFIG = {
 // 👑 Admin — bisa lihat semua data user
 const ADMIN_EMAIL = "zaidan1408@gmail.com";
 
-// 🔑 Claude API Key — isi dengan API key dari console.anthropic.com (format: sk-ant-...)
-const CLAUDE_API_KEY = "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";
-const AI_ON = CLAUDE_API_KEY !== "YOUR_CLAUDE_API_KEY"; // true = fitur AI text/OCR aktif
 
 const FB_ON = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"; // true = Firebase aktif
 let fbAuth = null, fbDb = null;
@@ -121,50 +118,6 @@ const loadAllVaults = async () => {
   if(!fbDb) return [];
   try{ const s=await getDocs(collection(fbDb,'vaults')); return s.docs.map(d=>({uid:d.id,...d.data()})); }catch(e){ console.warn('loadAllVaults:',e); return []; }
 };
-
-// ═══════════════════ CLAUDE API ═══════════════════
-async function parseVoice(text, wallets, categories) {
-  const wl = wallets.map(w=>w.name).join(', ');
-  const ic = categories.filter(c=>c.type==='income'||c.type==='both').map(c=>c.name).join(', ');
-  const ec = categories.filter(c=>c.type==='expense'||c.type==='both').map(c=>c.name).join(', ');
-  const prompt = `Kamu parser transaksi keuangan Indonesia. Extract info dari teks dan return HANYA JSON valid.\n\nWallet: ${wl}\nKategori Income: ${ic}\nKategori Expense: ${ec}\nHari ini: ${todayStr()}\n\nAturan:\n- "25rb/25ribu/25k"=25000, "1jt/1juta"=1000000, "500k"=500000\n- beli/bayar/makan/belanja/keluar/habis/isi=expense\n- gaji/terima/dapat/masuk/transfer dari=income\n- Pilih wallet & kategori terdekat dari list\n\nFormat JSON: {"type":"income|expense","amount":integer,"description":"max 40 char","category":"dari list","wallet":"dari list","date":"YYYY-MM-DD"}\n\nTeks: "${text}"\n\nJSON:`;
-  try {
-    if(!AI_ON) return null;
-    const r = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:300,messages:[{role:"user",content:prompt}]})});
-    const d = await r.json();
-    return JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
-  } catch(e) { return null; }
-}
-
-// ═══════════════════ RECEIPT OCR ═══════════════════
-async function parseReceipt(base64, mediaType, wallets, categories) {
-  const wl = wallets.map(w=>w.name).join(', ');
-  const ec = categories.filter(c=>c.type==='expense'||c.type==='both').map(c=>c.name).join(', ');
-  const ic = categories.filter(c=>c.type==='income'||c.type==='both').map(c=>c.name).join(', ');
-  const prompt = `Kamu adalah OCR parser struk/bukti transaksi keuangan Indonesia. Analisis gambar dan ekstrak detail transaksi. Return HANYA JSON valid tanpa markdown:
-{"type":"income atau expense","amount":integer_IDR,"description":"deskripsi singkat max 40 char","category":"nama kategori paling cocok dari list","wallet":"nama wallet paling cocok dari list","date":"YYYY-MM-DD","merchant":"nama toko/pengirim/penerima"}
-
-Wallet tersedia: ${wl}
-Kategori expense: ${ec}
-Kategori income: ${ic}
-Hari ini: ${todayStr()}
-
-Aturan: struk belanja/QRIS=expense, bukti transfer keluar=expense, transfer masuk=income, nota penjualan=income.
-Kalau bukan bukti transaksi keuangan, return {"error":"bukan bukti transaksi"}.`;
-  try {
-    if(!AI_ON) return null;
-    const res = await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json","x-api-key":CLAUDE_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},
-      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:400,
-        messages:[{role:"user",content:[
-          {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
-          {type:"text",text:prompt}
-        ]}]})
-    });
-    const d = await res.json();
-    return JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
-  } catch(e){ return null; }
-}
 
 // ═══════════════════ STYLES ═══════════════════
 const S = {
@@ -425,65 +378,9 @@ function TxModal({ wallets, categories, editTx, onClose, onSave, walletMode=true
     date: editTx?.date||todayStr(),
     note: editTx?.note||'',
   });
-  const [inputMode, setInputMode] = useState('form'); // 'form'|'ai'
-  const [aiText,   setAiText]   = useState('');
-  const [aiStatus, setAiStatus] = useState(''); // 'parsing'|'done'|'error'
-  const [aiResult, setAiResult] = useState(null);
-  const [imgPreview, setImgPreview] = useState(null);
-  const [imgFile,    setImgFile]    = useState(null);
-  const [imgStatus,  setImgStatus]  = useState(''); // 'parsing'|'done'|'error'
-  const fileRef = useRef(null);
 
   const filteredCats = categories.filter(c=>c.type===form.type||c.type==='both');
   const set = (k,v) => setForm(p=>({...p,[k]:v}));
-
-  // ── AI text parse ──
-  const handleParse = async () => {
-    const t = aiText.trim();
-    if(!t){ setAiStatus('error'); return; }
-    setAiStatus('parsing'); setAiResult(null);
-    try {
-      const result = await parseVoice(t, wallets, categories);
-      if(result && result.amount && result.type){ setAiResult(result); setAiStatus('done'); }
-      else setAiStatus('error');
-    } catch{ setAiStatus('error'); }
-  };
-
-  // ── Image OCR ──
-  const handleImageSelect = (e) => {
-    const file = e.target.files?.[0];
-    if(!file) return;
-    setImgFile(file); setAiResult(null); setAiStatus(''); setImgStatus('');
-    const reader = new FileReader();
-    reader.onload = ev => setImgPreview(ev.target.result);
-    reader.readAsDataURL(file);
-  };
-
-  const handleImageParse = async () => {
-    if(!imgFile) return;
-    setImgStatus('parsing'); setAiResult(null);
-    try {
-      const base64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=ev=>res(ev.target.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(imgFile); });
-      const result = await parseReceipt(base64, imgFile.type||'image/jpeg', wallets, categories);
-      if(result && !result.error && result.amount){ setAiResult(result); setImgStatus('done'); setAiStatus('done'); }
-      else{ setImgStatus('error'); }
-    } catch{ setImgStatus('error'); }
-  };
-
-  // ── Apply AI result to form ──
-  const applyResult = () => {
-    if(!aiResult) return;
-    const wallet = wallets.find(w=>w.name.toLowerCase()===aiResult.wallet?.toLowerCase())||wallets[0];
-    const cat = categories.find(c=>c.name.toLowerCase()===aiResult.category?.toLowerCase()&&(c.type===aiResult.type||c.type==='both'));
-    setForm(p=>({...p,
-      type:aiResult.type||p.type, amount:aiResult.amount||p.amount,
-      walletId:wallet?.id||p.walletId, categoryId:cat?.id||p.categoryId,
-      description:aiResult.description||aiResult.merchant||p.description,
-      date:aiResult.date||p.date,
-    }));
-    setAiResult(null); setAiStatus(''); setAiText(''); setImgPreview(null); setImgFile(null); setImgStatus('');
-    setInputMode('form');
-  };
 
   const handleSubmit = () => {
     if(!form.amount||(walletMode&&!form.walletId)||!form.categoryId||!form.description) return;
@@ -508,72 +405,6 @@ function TxModal({ wallets, categories, editTx, onClose, onSave, walletMode=true
               </button>
             ))}
           </div>
-          {/* Mode tabs */}
-          <div style={{display:'flex',gap:6,marginBottom:14}}>
-            {[['form','📝 Form Manual'],['ai','✨ AI Input']].map(([m,l])=>(
-              <button key={m} onClick={()=>setInputMode(m)} style={{padding:'7px 14px',borderRadius:6,border:`1px solid ${inputMode===m?C.gold:C.border}`,background:inputMode===m?'rgba(201,145,58,.1)':'transparent',color:inputMode===m?C.gold:C.muted,fontSize:13,cursor:'pointer',fontWeight:inputMode===m?600:400}}>{l}</button>
-            ))}
-          </div>
-
-          {/* ── AI INPUT MODE ── */}
-          {inputMode==='ai'&&(
-            <div style={{...S.card,padding:14,marginBottom:14}}>
-              {!AI_ON&&(
-                <div style={{background:'rgba(255,61,96,.08)',border:'1px solid rgba(255,61,96,.25)',borderRadius:8,padding:10,marginBottom:10}}>
-                  <p style={{fontSize:12,color:C.expense,fontWeight:600,marginBottom:2}}>⚠️ Claude API Key belum diisi</p>
-                  <p style={{fontSize:11,color:C.muted,lineHeight:1.4}}>Isi konstanta <span style={{fontFamily:'DM Mono,monospace'}}>CLAUDE_API_KEY</span> di bagian konfigurasi kode (dekat FIREBASE_CONFIG) dengan API key dari console.anthropic.com biar fitur AI aktif.</p>
-                </div>
-              )}
-              <p style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:4}}>✍️ Ceritakan Transaksinya</p>
-              <p style={{fontSize:11,color:C.muted,marginBottom:10}}>Tulis bebas: "tadi bayar makan siang di warteg 25rb dari BRI" atau "gaji 5jt masuk BCA"</p>
-              <textarea className="vi" style={{...S.input,height:72,resize:'none',marginBottom:8}} placeholder={'Ceritakan transaksinya...\nContoh: "habis belanja di indomaret 87rb pakai gopay"'} value={aiText} onChange={e=>setAiText(e.target.value)}/>
-              <button className="scale" onClick={handleParse} disabled={aiStatus==='parsing'} style={{...S.btnPrimary,padding:'10px',width:'100%',fontSize:13,marginBottom:12,opacity:aiStatus==='parsing'?.7:1}}>
-                {aiStatus==='parsing'?'⏳ AI sedang menganalisis...':'✨ Parse dengan AI'}
-              </button>
-
-              {/* Divider */}
-              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
-                <div style={{flex:1,height:1,background:C.border}}/><span style={{fontSize:11,color:C.muted}}>atau upload foto struk / bukti transfer</span><div style={{flex:1,height:1,background:C.border}}/>
-              </div>
-
-              {/* Image upload */}
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} style={{display:'none'}}/>
-              {!imgPreview?(
-                <button className="scale" onClick={()=>fileRef.current?.click()} style={{...S.btnGhost,padding:'12px',width:'100%',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                  📷 Upload Foto Struk / Bukti Transaksi
-                </button>
-              ):(
-                <div>
-                  <div style={{position:'relative',marginBottom:8}}>
-                    <img src={imgPreview} alt="preview" style={{width:'100%',maxHeight:180,objectFit:'contain',borderRadius:8,border:`1px solid ${C.border}`}}/>
-                    <button onClick={()=>{setImgPreview(null);setImgFile(null);setImgStatus('');}} style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,.6)',border:'none',borderRadius:'50%',width:24,height:24,cursor:'pointer',color:'#fff',fontSize:12}}>✕</button>
-                  </div>
-                  <button className="scale" onClick={handleImageParse} disabled={imgStatus==='parsing'} style={{...S.btnPrimary,padding:'10px',width:'100%',fontSize:13,background:`linear-gradient(135deg,#7C3AED,#A855F7)`,opacity:imgStatus==='parsing'?.7:1}}>
-                    {imgStatus==='parsing'?'🔍 AI sedang membaca struk...':'🔍 Baca Struk dengan AI'}
-                  </button>
-                  {imgStatus==='error'&&<p style={{color:C.expense,fontSize:12,textAlign:'center',marginTop:6}}>❌ Gagal baca. Pastikan gambar jelas atau coba foto ulang.</p>}
-                </div>
-              )}
-
-              {/* AI Result preview */}
-              {aiStatus==='done'&&aiResult&&(
-                <div style={{background:'rgba(27,194,120,.08)',border:`1px solid rgba(27,194,120,.25)`,borderRadius:8,padding:12,marginTop:12}}>
-                  <p style={{fontSize:12,color:C.income,fontWeight:700,marginBottom:8}}>✅ Berhasil diparse:</p>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
-                    {[['Tipe',aiResult.type==='income'?'📈 Pemasukan':'📉 Pengeluaran'],['Jumlah',fmt(aiResult.amount)],['Deskripsi',aiResult.description||aiResult.merchant||'-'],['Kategori',aiResult.category||'-'],['Wallet',aiResult.wallet||'-'],['Tanggal',aiResult.date||'-']].map(([k,v])=>(
-                      <div key={k} style={{background:C.surface,borderRadius:6,padding:'6px 10px'}}>
-                        <p style={{fontSize:10,color:C.muted,marginBottom:1}}>{k}</p>
-                        <p style={{fontSize:12,fontWeight:500,color:C.text}}>{v}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="scale" onClick={applyResult} style={{...S.btnPrimary,padding:'9px',width:'100%',marginTop:10,fontSize:13}}>✓ Terapkan ke Form →</button>
-                </div>
-              )}
-              {aiStatus==='error'&&<p style={{color:C.expense,fontSize:12,textAlign:'center',marginTop:8}}>❌ Gagal parse. Coba tulis lebih detail atau spesifik.</p>}
-            </div>
-          )}
-
           {/* ── FORM FIELDS ── */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
             <div><label style={{fontSize:11,color:C.muted,display:'block',marginBottom:3}}>Jumlah (Rp) *</label>
