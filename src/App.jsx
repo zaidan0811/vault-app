@@ -49,12 +49,24 @@ if (FB_ON) {
 }
 
 // ═══════════════════ CONSTANTS ═══════════════════
-const C = {
-  bg: '#06080E', surface: '#0B0E19', card: '#101624', cardHov: '#141D2E',
-  border: '#1C2840', text: '#D8E4FF', muted: '#3D5580',
-  gold: '#C9913A', goldL: '#E0A84E', goldD: '#9B6F28',
-  income: '#1BC278', expense: '#FF3D60', blue: '#4F7EFF',
+// ─── Theme system ────────────────────────────────────────────
+let _vaultTheme = 'dark'; // module-level, updated by App before render
+const DARK_C = {
+  bg:'#040610', surface:'#070A15', card:'#0A1020', cardHov:'#0F1828',
+  border:'#1C2840', text:'#D8E4FF', muted:'#3D5580',
+  gold:'#C9913A', goldL:'#E0A84E', goldD:'#9B6F28',
+  income:'#1BC278', expense:'#FF3D60', blue:'#4F7EFF',
 };
+const LIGHT_C = {
+  bg:'#EEF2FF', surface:'#E3E8F8', card:'#FFFFFF', cardHov:'#F5F7FF',
+  border:'#C8D0EC', text:'#0A0F1E', muted:'#7080A8',
+  gold:'#B8812E', goldL:'#D4973C', goldD:'#8F6020',
+  income:'#0A9E55', expense:'#D92645', blue:'#3565E0',
+};
+// C proxies to current theme — re-evaluated at render time
+const C = new Proxy(DARK_C, {
+  get(_,k){ return (_vaultTheme==='dark'?DARK_C:LIGHT_C)[k]; }
+});
 
 const PALETTE = ['#C9913A','#4F7EFF','#1BC278','#FF3D60','#8B5CF6','#38BDF8','#F472B6','#34D399','#FB923C','#60A5FA','#A78BFA','#4ADE80'];
 
@@ -120,12 +132,21 @@ const loadAllVaults = async () => {
 };
 
 // ═══════════════════ STYLES ═══════════════════
+// S uses JS getters so every access re-reads C at render time → theme-aware
 const S = {
-  input: {background:C.surface,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:'10px 14px',width:'100%',outline:'none',fontSize:14,fontFamily:'inherit'},
-  btnPrimary: {background:`linear-gradient(135deg, ${C.gold}, ${C.goldL})`,color:'#060208',fontWeight:700,border:'none',borderRadius:8,cursor:'pointer',fontSize:14,letterSpacing:'0.3px',transition:'opacity .15s'},
-  btnGhost: {background:'transparent',border:`1px solid ${C.border}`,color:C.text,borderRadius:8,cursor:'pointer',fontSize:14,transition:'all .15s'},
-  btnDanger: {background:'rgba(255,61,96,.1)',border:`1px solid rgba(255,61,96,.3)`,color:C.expense,borderRadius:8,cursor:'pointer',fontSize:14},
-  card: {background:C.card,border:`1px solid ${C.border}`,borderRadius:12},
+  get input()      { return {background:C.surface,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:'10px 14px',width:'100%',outline:'none',fontSize:14,fontFamily:'inherit'}; },
+  get btnPrimary() { return {background:`linear-gradient(135deg,${C.gold},${C.goldL})`,color:_vaultTheme==='dark'?'#060208':'#FFFFFF',fontWeight:700,border:'none',borderRadius:8,cursor:'pointer',fontSize:14,letterSpacing:'0.3px',transition:'opacity .15s'}; },
+  get btnGhost()   { return {background:'transparent',border:`1px solid ${C.border}`,color:C.text,borderRadius:8,cursor:'pointer',fontSize:14,transition:'all .15s'}; },
+  get btnDanger()  { return {background:'rgba(255,61,96,.1)',border:`1px solid rgba(255,61,96,.3)`,color:C.expense,borderRadius:8,cursor:'pointer',fontSize:14}; },
+  get card()       {
+    return _vaultTheme==='dark'
+      ? {background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.18)',borderRadius:16,
+         backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',
+         boxShadow:'inset 0 1px 0 rgba(255,255,255,0.28),inset 0 -1px 0 rgba(0,0,0,0.12),0 8px 32px rgba(0,0,0,0.45)'}
+      : {background:'rgba(255,255,255,0.42)',border:'1px solid rgba(255,255,255,0.70)',borderRadius:16,
+         backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',
+         boxShadow:'inset 0 1px 0 rgba(255,255,255,0.85),inset 0 -1px 0 rgba(0,0,0,0.05),0 8px 32px rgba(0,0,0,0.12)'};
+  },
 };
 
 // ═══════════════════ ONBOARDING ═══════════════════
@@ -654,7 +675,7 @@ function Sidebar({ view, setView, onAdd, totalBalance, wallets, saveIndicator, l
     {id:'settings',    icon:'🔧', label:'Pengaturan'},
   ];
   return (
-    <div style={{position:'fixed',top:0,left:0,bottom:0,width:220,background:C.surface,borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',zIndex:50,overflowY:'auto'}} className="sidebar">
+    <div style={{position:'fixed',top:0,left:0,bottom:0,width:220,background:_vaultTheme==='dark'?'rgba(6,8,14,0.80)':'rgba(230,236,255,0.80)',backdropFilter:'blur(24px)',WebkitBackdropFilter:'blur(24px)',borderRight:`1px solid rgba(255,255,255,${_vaultTheme==='dark'?'0.10':'0.60'})`,display:'flex',flexDirection:'column',zIndex:50,overflowY:'auto'}} className="sidebar">
       {/* Logo */}
       <div style={{padding:'18px 16px 12px'}}>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
@@ -758,7 +779,7 @@ function BottomNav({ view, setView, onAdd, onMore, walletMode=true }) {
   ];
   const moreViews = ['analytics','budget','milestones','recurring','debts','export','categories','wallets','admin'];
   return (
-    <div className="bottomnav" style={{position:'fixed',bottom:0,left:0,right:0,height:62,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',zIndex:100,paddingBottom:'env(safe-area-inset-bottom)'}}>
+    <div className="bottomnav" style={{position:'fixed',bottom:0,left:0,right:0,height:62,background:_vaultTheme==='dark'?'rgba(6,8,14,0.80)':'rgba(230,236,255,0.80)',backdropFilter:'blur(24px)',WebkitBackdropFilter:'blur(24px)',borderTop:`1px solid rgba(255,255,255,${_vaultTheme==='dark'?'0.10':'0.60'})`,display:'flex',zIndex:100,paddingBottom:'env(safe-area-inset-bottom)'}}>
       {items.map((item)=>{
         if(item.isCenter) return (
           <button key="add" onClick={onAdd} style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',cursor:'pointer'}}>
@@ -921,7 +942,7 @@ function WalletPage({ wallets, transactions, hide, onWalletDetail, onTransfer, o
           {filtered.map(w=>{
             const typeLabel = WALLET_TYPES.find(t=>t.value===w.type)?.label||w.type;
             return (
-              <div key={w.id} onClick={()=>onWalletDetail(w.id)} style={{background:C.card,borderRadius:16,padding:'16px 14px',cursor:'pointer',border:`1px solid ${w.color}33`,minHeight:140,display:'flex',flexDirection:'column',justifyContent:'space-between',transition:'all .2s',position:'relative',overflow:'hidden'}}
+              <div key={w.id} onClick={()=>onWalletDetail(w.id)} className="lg-card lg-card-sm" style={{...S.card,borderRadius:16,padding:'16px 14px',cursor:'pointer',minHeight:140,display:'flex',flexDirection:'column',justifyContent:'space-between',transition:'all .2s',position:'relative',overflow:'hidden'}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=w.color+'77';e.currentTarget.style.transform='translateY(-2px)';}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=w.color+'33';e.currentTarget.style.transform='translateY(0)';}}>
                 {/* Subtle bg circle */}
@@ -966,7 +987,7 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
       </div>
 
       {/* Total balance hero */}
-      <div style={{...S.card,padding:20,marginBottom:16,background:`linear-gradient(135deg, ${C.card} 0%, rgba(201,145,58,0.06) 100%)`,borderColor:'rgba(201,145,58,.2)'}}>
+      <div className="lg-card" style={{...S.card,padding:20,marginBottom:16}}>
         <p style={{fontSize:12,color:C.muted,marginBottom:6,letterSpacing:'1px',textTransform:'uppercase'}}>Total Saldo</p>
         <p className="vault-amt" style={{fontFamily:'DM Mono,monospace',fontSize:32,fontWeight:500,color:C.text,marginBottom:14}}>{fmt(totalBalance)}</p>
         <div style={{display:'flex',gap:20}}>
@@ -984,7 +1005,7 @@ function Dashboard({ wallets, categories, transactions, totalBalance, onAdd, onE
       {/* Wallet cards — only walletMode on */}
       {settings.walletMode&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:10,marginBottom:20}}>
         {wallets.map(w=>(
-          <div key={w.id} onClick={()=>onWalletDetail&&onWalletDetail(w.id)} style={{...S.card,padding:14,borderColor:w.color+'33',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .15s'}}
+          <div key={w.id} onClick={()=>onWalletDetail&&onWalletDetail(w.id)} className="lg-card lg-card-sm" style={{...S.card,padding:14,position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .15s'}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=w.color+'77';e.currentTarget.style.transform='translateY(-2px)';}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=w.color+'33';e.currentTarget.style.transform='translateY(0)';}}>
             <div style={{position:'absolute',right:-10,top:-10,width:60,height:60,borderRadius:'50%',background:w.color+'11'}}/>
@@ -2537,6 +2558,24 @@ function MilestoneView({ milestones, setMilestones, wallets }) {
   );
 }
 
+// ═══════════════════ AMBIENT BACKGROUND ═══════════════════
+function AmbientBg() {
+  const dark = _vaultTheme === 'dark';
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:0,pointerEvents:'none',overflow:'hidden'}}>
+      <div style={{position:'absolute',top:'-20%',left:'-12%',width:'65vw',height:'65vw',borderRadius:'50%',
+        background:dark?'rgba(201,145,58,0.45)':'rgba(201,145,58,0.55)',
+        filter:'blur(80px)',transform:'translateZ(0)'}}/>
+      <div style={{position:'absolute',bottom:'-25%',right:'-15%',width:'60vw',height:'60vw',borderRadius:'50%',
+        background:dark?'rgba(60,100,255,0.38)':'rgba(60,100,255,0.45)',
+        filter:'blur(80px)',transform:'translateZ(0)'}}/>
+      <div style={{position:'absolute',top:'42%',left:'28%',width:'40vw',height:'40vw',borderRadius:'50%',
+        background:dark?'rgba(160,60,255,0.28)':'rgba(160,60,255,0.32)',
+        filter:'blur(70px)',transform:'translateZ(0)'}}/>
+    </div>
+  );
+}
+
 // ═══════════════════ TOGGLE HELPER ═══════════════════
 function Toggle({ checked, onChange, label, desc, disabled }) {
   return (
@@ -2602,7 +2641,7 @@ function SettingsView({ settings, setSettings, fbUser, isAdmin, localMode }) {
         <h2 style={{fontFamily:'Syne,sans-serif',fontWeight:700,fontSize:22,color:C.text,marginBottom:4}}>⚙️ Pengaturan</h2>
         <p style={{color:C.muted,fontSize:13}}>Kustomisasi cara kerja VAULT untuk kamu.</p>
       </div>
-      <div style={{...S.card,padding:16,marginBottom:14}}>
+      <div className="lg-card" style={{...S.card,padding:16,marginBottom:14}}>
         <p style={{fontSize:12,fontWeight:700,color:C.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:12}}>Akun</p>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
           <div style={{width:44,height:44,borderRadius:'50%',background:isAdmin?`${C.gold}20`:`${C.blue}20`,border:`2px solid ${isAdmin?C.gold:C.blue}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:700,color:isAdmin?C.gold:C.blue,flexShrink:0}}>
@@ -2615,7 +2654,7 @@ function SettingsView({ settings, setSettings, fbUser, isAdmin, localMode }) {
           </div>
         </div>
       </div>
-      <div style={{...S.card,padding:16,marginBottom:14}}>
+      <div className="lg-card" style={{...S.card,padding:16,marginBottom:14}}>
         <p style={{fontSize:12,fontWeight:700,color:C.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:14}}>Mode Pencatatan</p>
         <Toggle checked={settings.walletMode} onChange={v=>setSettings(p=>({...p,walletMode:v}))}
           label="🏦 Mode Kantong (Multi-Wallet)"
@@ -2626,9 +2665,13 @@ function SettingsView({ settings, setSettings, fbUser, isAdmin, localMode }) {
           </div>
         )}
       </div>
-      <div style={{...S.card,padding:16,marginBottom:14,opacity:.6}}>
+      <div className="lg-card" style={{...S.card,padding:16,marginBottom:14}}>
         <p style={{fontSize:12,fontWeight:700,color:C.muted,letterSpacing:'1px',textTransform:'uppercase',marginBottom:14}}>Tampilan</p>
-        <Toggle checked={false} onChange={()=>{}} label="🌙 Dark Mode" desc="Segera hadir di Update 1.3 — Liquid Glass UI" disabled/>
+        <Toggle
+          checked={settings.theme==='light'}
+          onChange={v=>setSettings(p=>({...p,theme:v?'light':'dark'}))}
+          label="☀️ Light Mode"
+          desc="Ganti ke tampilan terang. Dark mode aktif secara default."/>
       </div>
       <div style={{...S.card,padding:16,borderColor:'rgba(255,61,96,.2)'}}>
         <p style={{fontSize:12,fontWeight:700,color:C.expense,letterSpacing:'1px',textTransform:'uppercase',marginBottom:12}}>Zona Bahaya</p>
@@ -2893,7 +2936,7 @@ export default function App() {
   const [editTx, setEditTx]     = useState(null);
   const [saveIndicator, setSaveIndicator] = useState('');
   const [dataLoading, setDataLoading] = useState(false);
-  const [settings, setSettings] = useState({ walletMode: true });
+  const [settings, setSettings] = useState({ walletMode: true, theme: 'dark' });
   const [migrationData, setMigrationData] = useState(null);
 
   const isAdmin = fbUser?.email === ADMIN_EMAIL;
@@ -3149,6 +3192,9 @@ export default function App() {
     </div>
   );
 
+  // Sync theme before render so C proxy + S getters return correct values
+  _vaultTheme = settings.theme || 'dark';
+
   const viewProps = {wallets,categories,transactions,milestones,recurringTxs,debts,onAdd:openAdd,onEdit:openEdit,onDelete:deleteTx,totalBalance,hide:hideAmounts,onWalletDetail:openWalletDetail,onTransfer:openTransferModal,settings};
 
   // Page title for header
@@ -3162,7 +3208,9 @@ export default function App() {
   const recurringDue = recurringTxs.filter(r=>r.isActive&&r.nextDue<=todayStr()).length;
 
   return (
-    <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'system-ui,-apple-system,sans-serif'}} className={hideAmounts?'vault-private':''}>
+    <div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:'system-ui,-apple-system,sans-serif',position:'relative'}}
+      className={[hideAmounts?'vault-private':'', settings.theme==='light'?'vault-light':''].filter(Boolean).join(' ')}>
+      <AmbientBg/>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;margin:0;padding:0} input,select,textarea,button{font-family:inherit}
@@ -3176,17 +3224,28 @@ export default function App() {
           .sidebar{display:none!important}
           .bottomnav{display:flex!important}
           .app-header{display:flex!important}
-          .main-wrap{margin-left:0!important;padding:0 0 72px!important;padding-top:58px!important}
+          .main-wrap{margin-left:0!important;padding:0 0 72px!important;padding-top:58px!important;position:relative;z-index:1}
         }
         @keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes vaultFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         .vault-private .vault-amt{filter:blur(7px);transition:filter .2s;user-select:none}
         .vault-private .vault-amt:hover{filter:blur(0)}
+        /* Liquid Glass iridescent top-border */
+        .lg-card{position:relative}
+        .lg-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;border-radius:16px 16px 0 0;
+          background:linear-gradient(90deg,rgba(255,80,80,0.65),rgba(255,200,80,0.65),rgba(80,255,180,0.65),rgba(80,130,255,0.65),rgba(200,80,255,0.65));
+          z-index:2;pointer-events:none}
+        .lg-card-sm::before{border-radius:14px 14px 0 0}
+        /* View transition */
+        .vault-view{animation:vaultFadeIn .22s ease both}
+        /* Light mode body bg override */
+        .vault-light{background:#C8D8FF!important}
       `}</style>
 
       {/* Mobile header */}
-      <div className="app-header" style={{position:'fixed',top:0,left:0,right:0,height:56,background:C.surface,borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',zIndex:90}}>
+      <div className="app-header" style={{position:'fixed',top:0,left:0,right:0,height:56,background:_vaultTheme==='dark'?'rgba(6,8,14,0.80)':'rgba(230,236,255,0.80)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',zIndex:90}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           {view!=='dashboard'&&view!=='wallets-page'&&(
             <button onClick={()=>setView('dashboard')} style={{background:'none',border:'none',cursor:'pointer',color:C.text,fontSize:20,padding:'0 6px 0 0'}}>‹</button>
@@ -3210,7 +3269,8 @@ export default function App() {
         recurringDue={recurringDue} ProfileMenu={ProfileMenu} walletMode={settings.walletMode}/>
 
       {/* Main content */}
-      <div className="main-wrap" style={{marginLeft:220,padding:'24px 28px',maxWidth:1100,minHeight:'100vh'}}>
+      <div className="main-wrap" style={{marginLeft:220,padding:'24px 28px',maxWidth:1100,minHeight:'100vh',position:'relative',zIndex:1}}>
+        <div className="vault-view" key={view}>
         {view==='admin'        && <AdminPanel currentUser={fbUser} onBack={()=>setView('dashboard')}/>}
         {view==='dashboard'    && <Dashboard {...viewProps}/>}
         {view==='wallets-page' && <WalletPage wallets={wallets} transactions={transactions} hide={hideAmounts} onWalletDetail={openWalletDetail} onTransfer={openTransferModal} onAddWallet={()=>setView('wallets')}/>}
@@ -3224,6 +3284,7 @@ export default function App() {
         {view==='categories'   && <CategoryManager categories={categories} setCategories={setCategories} transactions={transactions}/>}
         {view==='export'       && <ExportView transactions={transactions} wallets={wallets} categories={categories} onReset={handleResetAll} lsOk={lsOk||useFirebase}/>}
         {view==='settings'     && <SettingsView settings={settings} setSettings={setSettings} fbUser={fbUser} isAdmin={isAdmin} localMode={localMode}/>}
+        </div>
       </div>
 
       {/* Bottom nav (mobile) */}
